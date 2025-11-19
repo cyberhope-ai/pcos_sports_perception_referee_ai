@@ -1,7 +1,10 @@
 """
-Video Processing Pipeline - Phase 2
+Video Processing Pipeline - Phase 2 + Phase 3A
 
-Orchestrates: Video Ingestion → Detection → Tracking → DB Storage
+Orchestrates: Video Ingestion → Detection → Tracking → Event Detection → QSurface Generation → DB Storage
+
+Phase 2: YOLOv8s detection + ByteTrack tracking
+Phase 3A: Event detection + QSurface generation
 
 Follows PCOS Pipeline Templates and Vision Standards.
 """
@@ -14,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..perception.detector import Detector, DetectorConfig
 from ..tracking.tracker import Tracker, TrackerConfig
-from ..models import Game, Actor, Detection as DBDetection, ActorType
+from ..analysis.event_detector import EventDetector
+from ..analysis.qsurface_generator import QSurfaceGenerator
+from ..models import Game, Actor, Detection as DBDetection, ActorType, Event, EventType, QSurface, SurfaceType
 from ..config import settings
 
 logger = logging.getLogger(__name__)
@@ -22,17 +27,22 @@ logger = logging.getLogger(__name__)
 
 class VideoProcessor:
     """
-    Video processing pipeline: Detection → Tracking → Storage.
+    Video processing pipeline: Detection → Tracking → Event Detection → QSurface Generation → Storage.
 
     Phase 2 Implementation:
     - Frame-by-frame or batched processing
     - YOLOv8s detection
     - ByteTrack tracking
     - Database persistence
+
+    Phase 3A Implementation:
+    - Event detection (fouls, mechanics, rotations)
+    - QSurface generation (4 persona types)
+    - Event/QSurface database storage
     """
 
     def __init__(self):
-        """Initialize processor with detector and tracker"""
+        """Initialize processor with detector, tracker, event detector, and qsurface generator"""
         # Detector config from settings
         self.detector_config = DetectorConfig(
             model_path=settings.YOLO_MODEL_PATH,
@@ -54,10 +64,16 @@ class VideoProcessor:
 
         self.detector: Optional[Detector] = None
         self.tracker: Optional[Tracker] = None
+        self.event_detector: Optional[EventDetector] = None
+        self.qsurface_generator: Optional[QSurfaceGenerator] = None
 
-    async def initialize(self):
-        """Initialize models"""
-        logger.info("Initializing perception pipeline...")
+    async def initialize(self, game_id: UUID):
+        """Initialize models and analysis components
+
+        Args:
+            game_id: Game UUID for event detector initialization
+        """
+        logger.info("Initializing perception + analysis pipeline...")
 
         # Initialize detector
         self.detector = Detector(self.detector_config)
@@ -66,7 +82,13 @@ class VideoProcessor:
         # Initialize tracker
         self.tracker = Tracker(self.tracker_config)
 
-        logger.info("Perception pipeline ready")
+        # Initialize event detector (Phase 3A)
+        self.event_detector = EventDetector(game_id=str(game_id))
+
+        # Initialize QSurface generator (Phase 3A)
+        self.qsurface_generator = QSurfaceGenerator()
+
+        logger.info("Perception + analysis pipeline ready")
 
     async def process_video(
         self,
@@ -75,7 +97,14 @@ class VideoProcessor:
         db: AsyncSession
     ) -> dict:
         """
-        Process video file: detect → track → store.
+        Process video file: detect → track → analyze events → generate QSurfaces → store.
+
+        Phase 2 + 3A Pipeline:
+        1. Detection (YOLOv8s)
+        2. Tracking (ByteTrack)
+        3. Event Detection (Heuristic-based)
+        4. QSurface Generation (4 persona types)
+        5. Database Storage
 
         Args:
             video_path: path to video file
@@ -85,10 +114,10 @@ class VideoProcessor:
         Returns:
             Processing statistics
         """
-        if not self.detector or not self.tracker:
-            await self.initialize()
+        if not self.detector or not self.tracker or not self.event_detector:
+            await self.initialize(game_id)
 
-        logger.info(f"Processing video: {video_path}")
+        logger.info(f"Processing video: {video_path} (Phase 2 + 3A pipeline)")
 
         # Open video
         cap = cv2.VideoCapture(video_path)
@@ -104,7 +133,9 @@ class VideoProcessor:
         stats = {
             "frames_processed": 0,
             "detections_total": 0,
-            "actors_tracked": 0
+            "actors_tracked": 0,
+            "events_detected": 0,
+            "qsurfaces_generated": 0
         }
 
         frame_idx = 0
@@ -152,21 +183,44 @@ class VideoProcessor:
         db: AsyncSession,
         stats: dict
     ):
-        """Process batch of frames"""
-        # Detect
+        """
+        Process batch of frames: Detection → Tracking → Event Detection → QSurface Generation → Storage
+
+        Phase 2 + 3A: Complete pipeline
+        """
+        # Phase 2: Detect
         detections_batch = self.detector.detect_batch(frames, start_frame)
 
-        # Track each frame
+        # Phase 2: Track each frame + Phase 3A: Detect events
         for frame_idx, frame_dets in enumerate(detections_batch):
             current_frame = start_frame + frame_idx
+            timestamp = current_frame / 30.0  # Assume 30 FPS (Phase 4+: get from video metadata)
 
             # Update tracker
             tracks = self.tracker.update(frame_dets, current_frame)
 
-            # Store detections in DB (Phase 2: basic storage)
+            # Store tracks in DB
             for track in tracks:
                 await self._store_track(track, game_id, db)
 
+            # Phase 3A: Event detection
+            events = await self.event_detector.process_frame(tracks, current_frame, timestamp)
+
+            # Store events and generate QSurfaces
+            for event in events:
+                # Store event in DB
+                event_db = await self._store_event(event, game_id, db)
+
+                # Generate QSurfaces for this event
+                qsurfaces = await self.qsurface_generator.generate_all_surfaces(event, tracks)
+
+                # Store QSurfaces in DB
+                for qsurface in qsurfaces:
+                    await self._store_qsurface(qsurface, event_db.id, db)
+
+                stats["qsurfaces_generated"] += len(qsurfaces)
+
+            stats["events_detected"] += len(events)
             stats["detections_total"] += len(frame_dets)
             stats["frames_processed"] += 1
 
@@ -213,6 +267,94 @@ class VideoProcessor:
 
         await db.commit()
 
+    async def _store_event(self, event: Any, game_id: UUID, db: AsyncSession) -> Event:
+        """
+        Store event in database.
+
+        Phase 3A: Store candidate fouls, mechanics events, rotation events
+
+        Args:
+            event: CandidateFoulEvent, RefMechanicsEvent, or CrewRotationEvent
+            game_id: Game UUID
+            db: Database session
+
+        Returns:
+            Stored Event database object
+        """
+        import json
+
+        event_type_str = getattr(event, 'event_type', 'unknown')
+
+        # Map event types to EventType enum
+        event_type_map = {
+            'candidate_foul': 'candidate_foul',
+            'ref_mechanics': 'referee_mechanics',
+            'crew_rotation': 'crew_rotation'
+        }
+
+        event_type = EventType(event_type_map.get(event_type_str, 'candidate_foul'))
+
+        # Create Event DB object
+        event_db = Event(
+            id=getattr(event, 'id', None),
+            game_id=game_id,
+            event_type=event_type,
+            timestamp=getattr(event, 'timestamp', 0.0),
+            frame_number=getattr(event, 'frame_number', 0),
+            confidence=getattr(event, 'confidence', None),
+            metadata=getattr(event, 'metadata', {})
+        )
+
+        db.add(event_db)
+        await db.commit()
+        await db.refresh(event_db)
+
+        return event_db
+
+    async def _store_qsurface(self, qsurface: Any, event_id: UUID, db: AsyncSession) -> QSurface:
+        """
+        Store QSurface in database.
+
+        Phase 3A: Store all 4 surface types (referee, coach, player, league)
+
+        Args:
+            qsurface: RefereeQSurface, CoachQSurface, PlayerQSurface, or LeagueQSurface
+            event_id: Event UUID
+            db: Database session
+
+        Returns:
+            Stored QSurface database object
+        """
+        import json
+
+        surface_type_str = getattr(qsurface, 'surface_type', 'unknown')
+
+        # Map surface types to SurfaceType enum
+        surface_type_map = {
+            'referee_view': 'referee_view',
+            'coach_view': 'coach_view',
+            'player_view': 'player_view',
+            'league_view': 'league_view'
+        }
+
+        surface_type = SurfaceType(surface_type_map.get(surface_type_str, 'referee_view'))
+
+        # Create QSurface DB object
+        qsurface_db = QSurface(
+            id=getattr(qsurface, 'id', None),
+            event_id=event_id,
+            surface_type=surface_type,
+            persona_id=getattr(qsurface, 'persona_id', 'unknown'),
+            scores=getattr(qsurface, 'metadata', {}),  # Store all metadata as scores
+            interpretation=surface_type_str,  # Store surface type as interpretation
+            metadata=qsurface.model_dump()  # Store full QSurface data as JSON
+        )
+
+        db.add(qsurface_db)
+        await db.commit()
+
+        return qsurface_db
+
 
 # Global processor instance
 _processor: Optional[VideoProcessor] = None
@@ -223,5 +365,5 @@ async def get_processor() -> VideoProcessor:
     global _processor
     if _processor is None:
         _processor = VideoProcessor()
-        await _processor.initialize()
+        # Note: initialize() is called with game_id in process_video()
     return _processor
