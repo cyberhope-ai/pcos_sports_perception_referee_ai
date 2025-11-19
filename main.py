@@ -3,7 +3,7 @@ FastAPI Main Application
 
 PCOS Sports Perception Referee AI - API Server
 """
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
@@ -74,32 +74,64 @@ async def list_games(db: AsyncSession = Depends(get_db)):
 async def ingest_video(
     video_path: str,
     sport: str = "basketball",
+    background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Ingest a video file for processing.
 
-    Phase 2 TODO: Trigger actual perception pipeline
+    Phase 2: Triggers YOLOv8s detection + ByteTrack tracking pipeline.
     """
     from .models import Game, SportType
+    from .ingestion.video_processor import get_processor
+    from fastapi import BackgroundTasks
     import uuid
+    from datetime import datetime
 
     # Create game record
     game = Game(
         id=uuid.uuid4(),
         sport=SportType(sport),
         video_path=video_path,
-        processing_status="pending"
+        processing_status="processing"
     )
     db.add(game)
     await db.commit()
 
-    logger.info(f"Game created: {game.id}")
+    logger.info(f"Game created: {game.id} - Starting perception pipeline...")
+
+    # Process video in background (Phase 2)
+    async def process_video_task():
+        try:
+            processor = await get_processor()
+            from .database import get_db
+            async for db_session in get_db():
+                stats = await processor.process_video(video_path, game.id, db_session)
+                logger.info(f"Video processing complete for game {game.id}: {stats}")
+                break
+        except Exception as e:
+            logger.error(f"Video processing failed for game {game.id}: {e}")
+            # Update game status to failed
+            from .database import get_db
+            async for db_session in get_db():
+                from sqlalchemy import update
+                await db_session.execute(
+                    update(Game).where(Game.id == game.id).values(processing_status="failed")
+                )
+                await db_session.commit()
+                break
+
+    # Schedule background task
+    if background_tasks:
+        background_tasks.add_task(process_video_task)
+    else:
+        import asyncio
+        asyncio.create_task(process_video_task())
 
     return {
         "game_id": str(game.id),
-        "status": "ingested",
-        "message": "Video ingested. Processing will begin in Phase 2."
+        "status": "processing",
+        "message": "Video ingestion started. YOLOv8s detection + ByteTrack tracking in progress."
     }
 
 
