@@ -423,6 +423,222 @@ async def get_game_officiating_summary(
     }
 
 
+# =========================================================================
+# Phase 4: Clip Generation & Timeline System - API Endpoints
+# =========================================================================
+
+@app.get(f"{settings.API_PREFIX}/games/{{game_id}}/clips")
+async def get_game_clips(
+    game_id: str,
+    clip_category: str = None,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all clips for a game.
+
+    Phase 4: Returns video clip metadata for game events.
+
+    Query params:
+    - clip_category: Filter by category (candidate_foul, ref_mechanics, crew_rotation)
+    - limit: Max clips to return (default 100)
+
+    Returns:
+    - game_id
+    - total_clips
+    - clips: list of clip metadata (id, file_path, thumbnail, timestamps, category, event_anchor)
+    """
+    from sqlalchemy import select
+    from .models import Clip
+    from uuid import UUID
+
+    query = select(Clip).where(Clip.game_id == UUID(game_id))
+
+    # Filter by clip category if specified
+    if clip_category:
+        query = query.where(Clip.clip_category == clip_category)
+
+    query = query.limit(limit)
+    result = await db.execute(query)
+    clips = result.scalars().all()
+
+    return {
+        "game_id": game_id,
+        "total_clips": len(clips),
+        "clips": [
+            {
+                "id": str(c.id),
+                "clip_path": c.clip_path,
+                "thumbnail_path": c.thumbnail_path,
+                "start_time": c.start_time,
+                "end_time": c.end_time,
+                "duration": c.end_time - c.start_time,
+                "start_frame": c.start_frame,
+                "end_frame": c.end_frame,
+                "event_anchor_id": str(c.event_anchor_id) if c.event_anchor_id else None,
+                "related_events": c.related_events,
+                "clip_category": c.clip_category,
+                "tags": c.tags,
+                "qsurface_ids": c.qsurface_ids,
+                "created_at": c.created_at.isoformat()
+            }
+            for c in clips
+        ]
+    }
+
+
+@app.get(f"{settings.API_PREFIX}/events/{{event_id}}/clip")
+async def get_event_clip(
+    event_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get clip for specific event.
+
+    Phase 4: Returns clip metadata and file path for event.
+
+    Returns:
+    - Clip metadata for the event
+    - 404 if no clip exists for this event
+    """
+    from sqlalchemy import select
+    from .models import Clip
+    from uuid import UUID
+
+    result = await db.execute(
+        select(Clip).where(Clip.event_anchor_id == UUID(event_id))
+    )
+    clip = result.scalar_one_or_none()
+
+    if not clip:
+        raise HTTPException(status_code=404, detail=f"Clip not found for event {event_id}")
+
+    return {
+        "id": str(clip.id),
+        "game_id": str(clip.game_id),
+        "event_id": event_id,
+        "clip_path": clip.clip_path,
+        "thumbnail_path": clip.thumbnail_path,
+        "start_time": clip.start_time,
+        "end_time": clip.end_time,
+        "duration": clip.end_time - clip.start_time,
+        "start_frame": clip.start_frame,
+        "end_frame": clip.end_frame,
+        "event_anchor_id": str(clip.event_anchor_id) if clip.event_anchor_id else None,
+        "related_events": clip.related_events,
+        "clip_category": clip.clip_category,
+        "tags": clip.tags,
+        "qsurface_ids": clip.qsurface_ids,
+        "created_at": clip.created_at.isoformat()
+    }
+
+
+@app.get(f"{settings.API_PREFIX}/games/{{game_id}}/timeline")
+async def get_game_timeline(
+    game_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get timeline metadata for game visualization.
+
+    Phase 4: Returns structured timeline data for React UI consumption.
+
+    Returns:
+    - game_id
+    - events: chronological list of events with timestamps
+    - clips: list of clips with time ranges
+    - timeline_markers: key moments for timeline visualization
+    """
+    from sqlalchemy import select
+    from .models import Event, Clip, Game
+    from uuid import UUID
+
+    game_uuid = UUID(game_id)
+
+    # Get game metadata
+    game_result = await db.execute(select(Game).where(Game.id == game_uuid))
+    game = game_result.scalar_one_or_none()
+
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Game not found: {game_id}")
+
+    # Get all events ordered by timestamp
+    events_result = await db.execute(
+        select(Event).where(Event.game_id == game_uuid).order_by(Event.timestamp)
+    )
+    events = events_result.scalars().all()
+
+    # Get all clips ordered by start time
+    clips_result = await db.execute(
+        select(Clip).where(Clip.game_id == game_uuid).order_by(Clip.start_time)
+    )
+    clips = clips_result.scalars().all()
+
+    # Build timeline markers
+    timeline_markers = []
+    for event in events:
+        event_type_str = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
+
+        marker = {
+            "id": str(event.id),
+            "type": "event",
+            "event_type": event_type_str,
+            "timestamp": event.timestamp,
+            "frame_number": event.frame_number,
+            "confidence": event.confidence,
+            "has_clip": any(c.event_anchor_id == event.id for c in clips),
+            "metadata": event.metadata
+        }
+        timeline_markers.append(marker)
+
+    # Add clip markers
+    for clip in clips:
+        marker = {
+            "id": str(clip.id),
+            "type": "clip",
+            "clip_category": clip.clip_category,
+            "start_time": clip.start_time,
+            "end_time": clip.end_time,
+            "duration": clip.end_time - clip.start_time,
+            "thumbnail_path": clip.thumbnail_path,
+            "event_anchor_id": str(clip.event_anchor_id) if clip.event_anchor_id else None
+        }
+        timeline_markers.append(marker)
+
+    # Sort markers by timestamp
+    timeline_markers.sort(key=lambda m: m.get('timestamp', m.get('start_time', 0)))
+
+    return {
+        "game_id": game_id,
+        "sport": game.sport.value if hasattr(game.sport, 'value') else str(game.sport),
+        "processing_status": game.processing_status,
+        "total_events": len(events),
+        "total_clips": len(clips),
+        "events": [
+            {
+                "id": str(e.id),
+                "event_type": e.event_type.value if hasattr(e.event_type, 'value') else str(e.event_type),
+                "timestamp": e.timestamp,
+                "frame_number": e.frame_number,
+                "confidence": e.confidence
+            }
+            for e in events
+        ],
+        "clips": [
+            {
+                "id": str(c.id),
+                "clip_category": c.clip_category,
+                "start_time": c.start_time,
+                "end_time": c.end_time,
+                "thumbnail_path": c.thumbnail_path,
+                "event_anchor_id": str(c.event_anchor_id) if c.event_anchor_id else None
+            }
+            for c in clips
+        ],
+        "timeline_markers": timeline_markers
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=settings.API_HOST, port=settings.API_PORT)

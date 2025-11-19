@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     ENABLE_BALL_DETECTION: bool = True
     ENABLE_PERCEPTION_LOGGING: bool = os.getenv("ENABLE_PERCEPTION_LOGGING", "true").lower() == "true"
 
+    # Phase 4: Clip generation
+    CLIP_OUTPUT_DIR: str = os.getenv("CLIP_OUTPUT_DIR", "./clips")
+    CLIP_PADDING_BEFORE: float = float(os.getenv("CLIP_PADDING_BEFORE", "3.0"))  # seconds before event
+    CLIP_PADDING_AFTER: float = float(os.getenv("CLIP_PADDING_AFTER", "5.0"))  # seconds after event
+
     class Config:
         env_file = ".env"
         case_sensitive = True

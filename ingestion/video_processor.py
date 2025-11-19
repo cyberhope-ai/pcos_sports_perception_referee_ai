@@ -185,6 +185,76 @@ class VideoProcessor:
             logger.error(f"SkillDNA processing failed: {e}", exc_info=True)
             # Continue anyway - SkillDNA is optional
 
+        # Update game status to "generating_clips"
+        await db.execute(
+            update(Game)
+            .where(Game.id == game_id)
+            .values(processing_status="generating_clips")
+        )
+        await db.commit()
+
+        # Phase 4: Generate clips for events
+        logger.info("Starting clip generation...")
+        from ..media.clip_extractor import ClipExtractor, create_clip_request_from_event
+        from ..models import Clip
+
+        clip_extractor = ClipExtractor(output_dir=settings.CLIP_OUTPUT_DIR)
+
+        try:
+            # Load all events for this game
+            events_result = await db.execute(
+                select(Event).where(Event.game_id == game_id)
+            )
+            events = events_result.scalars().all()
+
+            clips_generated = 0
+            for event in events:
+                # Generate clip for candidate_foul, ref_mechanics, and crew_rotation events
+                event_type_str = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
+
+                if event_type_str in ['candidate_foul', 'ref_mechanics', 'crew_rotation']:
+                    # Create clip request
+                    clip_request = create_clip_request_from_event(
+                        game_id=str(game_id),
+                        event_id=str(event.id),
+                        video_path=video_path,
+                        event_timestamp=event.timestamp,
+                        event_type=event_type_str,
+                        clip_dir=settings.CLIP_OUTPUT_DIR,
+                        padding_before=3.0,
+                        padding_after=5.0
+                    )
+
+                    # Extract clip
+                    clip_result = clip_extractor.extract_clip(clip_request)
+
+                    if clip_result.success:
+                        # Store clip in database
+                        clip_db = Clip(
+                            id=UUID(clip_result.clip_id),
+                            game_id=game_id,
+                            start_time=clip_result.start_time,
+                            end_time=clip_result.end_time,
+                            start_frame=int(clip_result.start_time * fps),
+                            end_frame=int(clip_result.end_time * fps),
+                            clip_path=clip_result.file_path,
+                            thumbnail_path=clip_result.thumbnail_path,
+                            event_anchor_id=event.id,
+                            related_events=[str(event.id)],
+                            clip_category=event_type_str,
+                            tags=[event_type_str]
+                        )
+                        db.add(clip_db)
+                        clips_generated += 1
+
+            await db.commit()
+            stats['clips_generated'] = clips_generated
+            logger.info(f"Clip generation complete: {clips_generated} clips")
+
+        except Exception as e:
+            logger.error(f"Clip generation failed: {e}", exc_info=True)
+            # Continue anyway - clips are optional
+
         # Update game status to "completed"
         await db.execute(
             update(Game)
