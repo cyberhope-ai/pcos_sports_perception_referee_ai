@@ -232,6 +232,197 @@ async def get_event_qsurfaces(
     }
 
 
+# =========================================================================
+# Phase 3B-2: SkillDNA API Endpoints
+# =========================================================================
+
+@app.get(f"{settings.API_PREFIX}/refs/{{ref_id}}/skilldna")
+async def get_referee_skilldna(
+    ref_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get Referee SkillDNA profile.
+
+    Phase 3B-2: Returns longitudinal referee performance metrics.
+
+    Returns:
+    - games_count
+    - avg_mechanics_score
+    - avg_visibility_score
+    - avg_rotation_quality
+    - foul_counts_by_type
+    - call_density
+    - occlusion_avg
+    - regional_coverage_score
+    """
+    from sqlalchemy import select
+    from .models import RefereeSkillProfile
+
+    result = await db.execute(
+        select(RefereeSkillProfile).where(RefereeSkillProfile.referee_id == ref_id)
+    )
+    profile = result.scalar_one_or_none()
+
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Referee SkillDNA profile not found for {ref_id}")
+
+    return {
+        "referee_id": profile.referee_id,
+        "games_count": profile.games_count,
+        "total_events": profile.total_events,
+        "frames_analyzed": profile.frames_analyzed,
+        "avg_mechanics_score": profile.avg_mechanics_score,
+        "avg_visibility_score": profile.avg_visibility_score,
+        "avg_rotation_quality": profile.avg_rotation_quality,
+        "avg_position_score": profile.avg_position_score,
+        "foul_counts_by_type": profile.foul_counts_by_type,
+        "call_density": profile.call_density,
+        "occlusion_avg": profile.occlusion_avg,
+        "regional_coverage_score": profile.regional_coverage_score,
+        "created_at": profile.created_at.isoformat(),
+        "last_updated": profile.last_updated.isoformat()
+    }
+
+
+@app.get(f"{settings.API_PREFIX}/players/{{player_id}}/skilldna")
+async def get_player_skilldna(
+    player_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get Player SkillDNA profile.
+
+    Phase 3B-2: Returns longitudinal player behavior metrics.
+
+    Returns:
+    - games_count
+    - total_fouls
+    - foul_counts_by_type
+    - fouls_per_100_frames
+    - avg_decision_quality_score
+    - risk_index
+    - contact_frequency
+    - aggressive_tendency
+    """
+    from sqlalchemy import select
+    from .models import PlayerSkillProfile
+
+    result = await db.execute(
+        select(PlayerSkillProfile).where(PlayerSkillProfile.player_id == player_id)
+    )
+    profile = result.scalar_one_or_none()
+
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Player SkillDNA profile not found for {player_id}")
+
+    return {
+        "player_id": profile.player_id,
+        "games_count": profile.games_count,
+        "total_fouls": profile.total_fouls,
+        "frames_analyzed": profile.frames_analyzed,
+        "foul_counts_by_type": profile.foul_counts_by_type,
+        "fouls_per_100_frames": profile.fouls_per_100_frames,
+        "avg_decision_quality_score": profile.avg_decision_quality_score,
+        "risk_index": profile.risk_index,
+        "contact_frequency": profile.contact_frequency,
+        "aggressive_tendency": profile.aggressive_tendency,
+        "created_at": profile.created_at.isoformat(),
+        "last_updated": profile.last_updated.isoformat()
+    }
+
+
+@app.get(f"{settings.API_PREFIX}/crews/{{crew_id}}/skilldna")
+async def get_crew_skilldna(
+    crew_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get Crew SkillDNA profile.
+
+    Phase 3B-2: Returns longitudinal crew performance metrics.
+
+    Returns:
+    - games_count
+    - avg_rotation_quality
+    - avg_fairness_index
+    - avg_consistency_signal
+    - late_rotation_count
+    - misaligned_rotation_count
+    """
+    from sqlalchemy import select
+    from .models import CrewSkillProfile
+
+    result = await db.execute(
+        select(CrewSkillProfile).where(CrewSkillProfile.crew_id == crew_id)
+    )
+    profile = result.scalar_one_or_none()
+
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Crew SkillDNA profile not found for {crew_id}")
+
+    return {
+        "crew_id": profile.crew_id,
+        "games_count": profile.games_count,
+        "total_rotations": profile.total_rotations,
+        "avg_rotation_quality": profile.avg_rotation_quality,
+        "avg_fairness_index": profile.avg_fairness_index,
+        "avg_consistency_signal": profile.avg_consistency_signal,
+        "avg_regional_balance": profile.avg_regional_balance,
+        "late_rotation_count": profile.late_rotation_count,
+        "misaligned_rotation_count": profile.misaligned_rotation_count,
+        "created_at": profile.created_at.isoformat(),
+        "last_updated": profile.last_updated.isoformat()
+    }
+
+
+@app.get(f"{settings.API_PREFIX}/games/{{game_id}}/officiating_summary")
+async def get_game_officiating_summary(
+    game_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get Game Officiating Summary.
+
+    Phase 3B-2: Returns league-level game aggregates.
+
+    Returns:
+    - events_count
+    - candidate_foul_count
+    - ref_mechanics_count
+    - crew_rotation_count
+    - fairness_index_avg
+    - consistency_signal_avg
+    - regional_coverage_quality
+    - occlusion_frequency
+    """
+    from sqlalchemy import select
+    from .models import GameOfficiatingSummary
+    from uuid import UUID
+
+    result = await db.execute(
+        select(GameOfficiatingSummary).where(GameOfficiatingSummary.game_id == UUID(game_id))
+    )
+    summary = result.scalar_one_or_none()
+
+    if not summary:
+        raise HTTPException(status_code=404, detail=f"Game officiating summary not found for {game_id}")
+
+    return {
+        "game_id": str(summary.game_id),
+        "events_count": summary.events_count,
+        "candidate_foul_count": summary.candidate_foul_count,
+        "ref_mechanics_count": summary.ref_mechanics_count,
+        "crew_rotation_count": summary.crew_rotation_count,
+        "fairness_index_avg": summary.fairness_index_avg,
+        "consistency_signal_avg": summary.consistency_signal_avg,
+        "regional_coverage_quality": summary.regional_coverage_quality,
+        "occlusion_frequency": summary.occlusion_frequency,
+        "created_at": summary.created_at.isoformat(),
+        "last_updated": summary.last_updated.isoformat()
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=settings.API_HOST, port=settings.API_PORT)

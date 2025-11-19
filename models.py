@@ -324,3 +324,142 @@ class SkillDNAUpdate(Base):
         Index("idx_skilldna_type", "update_type"),
         Index("idx_skilldna_updated", "updated_at"),
     )
+
+
+class RefereeSkillProfile(Base):
+    """Referee SkillDNA Profile - Longitudinal referee performance metrics"""
+    __tablename__ = "referee_skill_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    referee_id = Column(String, unique=True, nullable=False, index=True)
+
+    # Game statistics
+    games_count = Column(Integer, default=0)
+    total_events = Column(Integer, default=0)
+    frames_analyzed = Column(Integer, default=0)
+
+    # Aggregated metrics (Phase 3B-1 + 3B-2)
+    avg_mechanics_score = Column(Float, default=0.0)
+    avg_visibility_score = Column(Float, default=0.0)
+    avg_rotation_quality = Column(Float, default=0.0)
+    avg_position_score = Column(Float, default=0.0)
+
+    # Foul classification metrics
+    foul_counts_by_type = Column(JSONB, default=dict)  # {"block": 10, "charge": 5, ...}
+    call_density = Column(Float, default=0.0)  # events per 100 frames
+
+    # Advanced metrics (Phase 3B-2)
+    occlusion_avg = Column(Float, default=0.0)  # avg occlusion factor
+    regional_coverage_score = Column(Float, default=0.0)  # 0-1 regional balance
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Indices
+    __table_args__ = (
+        Index("idx_ref_skill_profile_id", "referee_id"),
+        Index("idx_ref_skill_updated", "last_updated"),
+    )
+
+
+class PlayerSkillProfile(Base):
+    """Player SkillDNA Profile - Longitudinal player behavior metrics"""
+    __tablename__ = "player_skill_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(String, unique=True, nullable=False, index=True)
+
+    # Game statistics
+    games_count = Column(Integer, default=0)
+    total_fouls = Column(Integer, default=0)
+    frames_analyzed = Column(Integer, default=0)
+
+    # Foul metrics
+    foul_counts_by_type = Column(JSONB, default=dict)  # {"charge": 3, "reach_in": 5, ...}
+    fouls_per_100_frames = Column(Float, default=0.0)
+
+    # Behavioral metrics (Phase 3B-2)
+    avg_decision_quality_score = Column(Float, default=0.5)
+    risk_index = Column(Float, default=0.5)  # Overall risk factor
+
+    # Contact patterns
+    contact_frequency = Column(Float, default=0.0)
+    aggressive_tendency = Column(Float, default=0.0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Indices
+    __table_args__ = (
+        Index("idx_player_skill_profile_id", "player_id"),
+        Index("idx_player_skill_updated", "last_updated"),
+    )
+
+
+class CrewSkillProfile(Base):
+    """Crew SkillDNA Profile - Longitudinal crew performance metrics"""
+    __tablename__ = "crew_skill_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    crew_id = Column(String, unique=True, nullable=False, index=True)  # Composite of ref IDs
+
+    # Game statistics
+    games_count = Column(Integer, default=0)
+    total_rotations = Column(Integer, default=0)
+
+    # Aggregated crew metrics
+    avg_rotation_quality = Column(Float, default=0.0)
+    avg_fairness_index = Column(Float, default=0.0)
+    avg_consistency_signal = Column(Float, default=0.0)
+    avg_regional_balance = Column(Float, default=0.0)
+
+    # Rotation metrics
+    late_rotation_count = Column(Integer, default=0)
+    misaligned_rotation_count = Column(Integer, default=0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Indices
+    __table_args__ = (
+        Index("idx_crew_skill_profile_id", "crew_id"),
+        Index("idx_crew_skill_updated", "last_updated"),
+    )
+
+
+class GameOfficiatingSummary(Base):
+    """Game Officiating Summary - League-level game aggregates"""
+    __tablename__ = "game_officiating_summaries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    game_id = Column(UUID(as_uuid=True), ForeignKey("games.id"), unique=True, nullable=False)
+
+    # Event counts
+    events_count = Column(Integer, default=0)
+    candidate_foul_count = Column(Integer, default=0)
+    ref_mechanics_count = Column(Integer, default=0)
+    crew_rotation_count = Column(Integer, default=0)
+
+    # Aggregated league metrics (from LeagueQSurfaces)
+    fairness_index_avg = Column(Float, default=0.0)
+    consistency_signal_avg = Column(Float, default=0.0)
+
+    # Coverage metrics
+    regional_coverage_quality = Column(Float, default=0.0)
+    occlusion_frequency = Column(Float, default=0.0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    game = relationship("Game")
+
+    # Indices
+    __table_args__ = (
+        Index("idx_game_summary_game", "game_id"),
+        Index("idx_game_summary_updated", "last_updated"),
+    )

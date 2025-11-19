@@ -163,8 +163,29 @@ class VideoProcessor:
 
         cap.release()
 
-        # Update game status
+        # Update game status to "processing_skilldna"
         from sqlalchemy import select, update
+        await db.execute(
+            update(Game)
+            .where(Game.id == game_id)
+            .values(processing_status="processing_skilldna")
+        )
+        await db.commit()
+
+        # Phase 3B-2: Process SkillDNA updates
+        logger.info("Starting SkillDNA processing...")
+        from ..analysis.skilldna_adapter import SkillDNAAdapter
+
+        skilldna_adapter = SkillDNAAdapter(db, str(game_id))
+        try:
+            skilldna_stats = await skilldna_adapter.process_game()
+            stats.update(skilldna_stats)
+            logger.info(f"SkillDNA processing complete: {skilldna_stats}")
+        except Exception as e:
+            logger.error(f"SkillDNA processing failed: {e}", exc_info=True)
+            # Continue anyway - SkillDNA is optional
+
+        # Update game status to "completed"
         await db.execute(
             update(Game)
             .where(Game.id == game_id)
