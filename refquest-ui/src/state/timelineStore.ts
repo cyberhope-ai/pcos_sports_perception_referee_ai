@@ -1,22 +1,28 @@
 /**
- * Phase 5A: Timeline State Store (Zustand)
+ * Phase 5A/5B: Timeline State Store (Zustand)
  *
  * Manages timeline view state and filters
  */
 import { create } from 'zustand';
 import type { FilterState } from '../types';
 
+export interface TimelineFilters extends FilterState {
+  foul_types?: string[];
+}
+
 interface TimelineState {
   selectedEventId: string | null;
+  selectedClipId: string | null;
   hoveredEventId: string | null;
-  filters: FilterState;
+  filters: TimelineFilters;
   zoomLevel: number;
   timeRange: [number, number] | null;
 
   // Actions
-  setSelectedEvent: (eventId: string | null) => void;
+  setSelectedEvent: (eventId: string | null, clipId?: string | null) => void;
+  setSelectedClip: (clipId: string | null) => void;
   setHoveredEvent: (eventId: string | null) => void;
-  setFilters: (filters: Partial<FilterState>) => void;
+  setFilters: (filters: Partial<TimelineFilters>) => void;
   clearFilters: () => void;
   setZoomLevel: (level: number) => void;
   setTimeRange: (range: [number, number] | null) => void;
@@ -26,13 +32,19 @@ interface TimelineState {
 export const useTimelineStore = create<TimelineState>((set) => ({
   // Initial state
   selectedEventId: null,
+  selectedClipId: null,
   hoveredEventId: null,
   filters: {},
   zoomLevel: 1,
   timeRange: null,
 
   // Actions
-  setSelectedEvent: (eventId) => set({ selectedEventId: eventId }),
+  setSelectedEvent: (eventId, clipId) => set({
+    selectedEventId: eventId,
+    selectedClipId: clipId || null
+  }),
+
+  setSelectedClip: (clipId) => set({ selectedClipId: clipId }),
 
   setHoveredEvent: (eventId) => set({ hoveredEventId: eventId }),
 
@@ -50,6 +62,7 @@ export const useTimelineStore = create<TimelineState>((set) => ({
   reset: () =>
     set({
       selectedEventId: null,
+      selectedClipId: null,
       hoveredEventId: null,
       filters: {},
       zoomLevel: 1,

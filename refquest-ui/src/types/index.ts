@@ -296,15 +296,37 @@ export interface BoundingBox {
 // TIMELINE TYPES
 // ====================
 
-export interface TimelineMarker {
+export interface TimelineEventMarker {
   id: string;
-  type: 'event' | 'clip';
-  event_type?: EventType;
+  type: 'event';
+  event_type: string;
   timestamp: number;
-  title?: string;
-  description?: string;
-  has_clip?: boolean;
-  importance?: number;
+  frame_number?: number;
+  confidence?: number;
+  has_clip: boolean;
+  metadata: Record<string, any>;
+}
+
+export interface TimelineClipMarker {
+  id: string;
+  type: 'clip';
+  clip_category?: string;
+  start_time: number;
+  end_time: number;
+  duration: number;
+  thumbnail_path?: string;
+  event_anchor_id?: string;
+}
+
+export type TimelineMarker = TimelineEventMarker | TimelineClipMarker;
+
+export interface TimelineResponse {
+  game_id: string;
+  sport: string;
+  processing_status: string;
+  total_events: number;
+  total_clips: number;
+  timeline_markers: TimelineMarker[];
 }
 
 // ====================

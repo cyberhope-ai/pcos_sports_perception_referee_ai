@@ -11,7 +11,6 @@ import type {
   Clip,
   QSurface,
   SkillDNAProfile,
-  TimelineMarker,
 } from '../types';
 
 // ====================
@@ -48,15 +47,6 @@ export function useGame(gameId: string) {
   });
 }
 
-export function useGameTimeline(gameId: string) {
-  return useQuery({
-    queryKey: queryKeys.gameTimeline(gameId),
-    queryFn: () =>
-      apiClient.get<{ timeline_markers: TimelineMarker[] }>(`/games/${gameId}/timeline`),
-    enabled: !!gameId,
-  });
-}
-
 export function useGameClips(gameId: string, filters?: { event_type?: string; limit?: number }) {
   return useQuery({
     queryKey: [...queryKeys.gameClips(gameId), filters],
@@ -69,6 +59,14 @@ export function useGameEvents(gameId: string, filters?: { event_type?: string })
   return useQuery({
     queryKey: [...queryKeys.gameEvents(gameId), filters],
     queryFn: () => apiClient.get<Event[]>(`/games/${gameId}/events`, filters),
+    enabled: !!gameId,
+  });
+}
+
+export function useGameTimeline(gameId: string) {
+  return useQuery({
+    queryKey: queryKeys.gameTimeline(gameId),
+    queryFn: () => apiClient.get<import('../types').TimelineResponse>(`/games/${gameId}/timeline`),
     enabled: !!gameId,
   });
 }

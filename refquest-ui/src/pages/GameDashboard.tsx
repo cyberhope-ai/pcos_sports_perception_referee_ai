@@ -1,17 +1,19 @@
 /**
- * Phase 5A: Game Dashboard Page (Placeholder)
+ * Phase 5B: Game Dashboard Page
  *
- * Main dashboard for viewing game details, timeline, and clips
- * Full implementation in Phase 5B/5C
+ * Main dashboard with timeline view and clip player
+ * Integrates Timeline + ClipPlayer components
  */
 import { useParams } from 'react-router-dom';
 import { useGame } from '../api/hooks';
 import { useGameStore } from '../state/gameStore';
 import { useEffect } from 'react';
+import { TimelineView } from '../components/timeline/TimelineView';
+import { ClipPlayer } from '../components/clips/ClipPlayer';
 
 export function GameDashboard() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { data: game, isLoading, error } = useGame(gameId || '');
+  const { isLoading, error } = useGame(gameId || '');
   const { setCurrentGame } = useGameStore();
 
   useEffect(() => {
@@ -42,36 +44,26 @@ export function GameDashboard() {
     );
   }
 
-  return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Game Dashboard</h1>
-
-        {/* Placeholder for Phase 5B/5C */}
-        <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Game: {gameId}</h2>
-          <p className="text-gray-600 mb-4">
-            Full timeline view, clip player, and event inspector will be implemented in Phase 5B and 5C.
-          </p>
-
-          {game && (
-            <div className="space-y-2">
-              <p className="text-sm">
-                <span className="font-medium">Status:</span> {game.processing_status}
-              </p>
-              {game.duration && (
-                <p className="text-sm">
-                  <span className="font-medium">Duration:</span> {game.duration}s
-                </p>
-              )}
-              {game.fps && (
-                <p className="text-sm">
-                  <span className="font-medium">FPS:</span> {game.fps}
-                </p>
-              )}
-            </div>
-          )}
+  if (!gameId) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-gray-600">No game ID provided</p>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full lg:flex-row">
+      {/* Timeline View - Left side (60%) */}
+      <div className="w-full lg:w-3/5 h-1/2 lg:h-full border-b lg:border-b-0 lg:border-r border-gray-200">
+        <TimelineView gameId={gameId} />
+      </div>
+
+      {/* Clip Player - Right side (40%) */}
+      <div className="w-full lg:w-2/5 h-1/2 lg:h-full">
+        <ClipPlayer />
       </div>
     </div>
   );
