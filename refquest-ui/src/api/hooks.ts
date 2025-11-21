@@ -1,5 +1,5 @@
 /**
- * Phase 5A: React Query Hooks
+ * Phase 5A-5D: React Query Hooks
  *
  * Custom hooks for data fetching using @tanstack/react-query
  */
@@ -11,6 +11,10 @@ import type {
   Clip,
   QSurface,
   SkillDNAProfile,
+  RefereeSkillProfile,
+  PlayerSkillProfile,
+  CrewSkillProfile,
+  GameOfficiatingSummary,
 } from '../types';
 
 // ====================
@@ -23,6 +27,7 @@ export const queryKeys = {
   gameTimeline: (id: string) => ['games', id, 'timeline'] as const,
   gameClips: (id: string) => ['games', id, 'clips'] as const,
   gameEvents: (id: string) => ['games', id, 'events'] as const,
+  gameOfficiatingSummary: (id: string) => ['games', id, 'officiating-summary'] as const,
 
   events: ['events'] as const,
   event: (id: string) => ['events', id] as const,
@@ -33,6 +38,9 @@ export const queryKeys = {
   clip: (id: string) => ['clips', id] as const,
 
   skillDNA: (actorId: string) => ['skilldna', actorId] as const,
+  refereeSkillDNA: (refId: string) => ['skilldna', 'referee', refId] as const,
+  playerSkillDNA: (playerId: string) => ['skilldna', 'player', playerId] as const,
+  crewSkillDNA: (crewId: string) => ['skilldna', 'crew', crewId] as const,
 };
 
 // ====================
@@ -100,14 +108,65 @@ export function useEventQSurfaces(eventId: string) {
 }
 
 // ====================
-// SKILLDNA HOOKS
+// SKILLDNA HOOKS (Phase 5D)
 // ====================
 
+/**
+ * Legacy hook - use specific hooks below instead
+ */
 export function useSkillDNA(actorId: string) {
   return useQuery({
     queryKey: queryKeys.skillDNA(actorId),
     queryFn: () => apiClient.get<SkillDNAProfile>(`/skilldna/${actorId}`),
     enabled: !!actorId,
+  });
+}
+
+/**
+ * Fetch referee SkillDNA profile
+ * GET /api/v1/refs/{ref_id}/skilldna
+ */
+export function useRefereeSkillDNA(refId: string) {
+  return useQuery({
+    queryKey: queryKeys.refereeSkillDNA(refId),
+    queryFn: () => apiClient.get<RefereeSkillProfile>(`/refs/${refId}/skilldna`),
+    enabled: !!refId,
+  });
+}
+
+/**
+ * Fetch player SkillDNA profile
+ * GET /api/v1/players/{player_id}/skilldna
+ */
+export function usePlayerSkillDNA(playerId: string) {
+  return useQuery({
+    queryKey: queryKeys.playerSkillDNA(playerId),
+    queryFn: () => apiClient.get<PlayerSkillProfile>(`/players/${playerId}/skilldna`),
+    enabled: !!playerId,
+  });
+}
+
+/**
+ * Fetch crew SkillDNA profile
+ * GET /api/v1/crews/{crew_id}/skilldna
+ */
+export function useCrewSkillDNA(crewId: string) {
+  return useQuery({
+    queryKey: queryKeys.crewSkillDNA(crewId),
+    queryFn: () => apiClient.get<CrewSkillProfile>(`/crews/${crewId}/skilldna`),
+    enabled: !!crewId,
+  });
+}
+
+/**
+ * Fetch game officiating summary
+ * GET /api/v1/games/{game_id}/officiating_summary
+ */
+export function useGameOfficiatingSummary(gameId: string) {
+  return useQuery({
+    queryKey: queryKeys.gameOfficiatingSummary(gameId),
+    queryFn: () => apiClient.get<GameOfficiatingSummary>(`/games/${gameId}/officiating_summary`),
+    enabled: !!gameId,
   });
 }
 

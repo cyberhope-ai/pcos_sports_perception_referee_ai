@@ -223,9 +223,76 @@ export interface LeagueQSurface extends QSurface {
 }
 
 // ====================
-// SKILLDNA TYPES
+// SKILLDNA TYPES (Phase 5D)
 // ====================
 
+/**
+ * Referee SkillDNA Profile
+ * Aggregated performance metrics for a referee across games
+ */
+export interface RefereeSkillProfile {
+  referee_id: string;
+  games_count: number;
+  total_events: number;
+  avg_mechanics_score: number;
+  avg_visibility_score: number;
+  avg_rotation_quality: number;
+  occlusion_avg: number;
+  regional_coverage_score?: number;
+  foul_counts_by_type: Record<string, number>;
+  call_density?: number;
+  last_updated?: string;
+}
+
+/**
+ * Player SkillDNA Profile
+ * Aggregated performance metrics for a player across games
+ */
+export interface PlayerSkillProfile {
+  player_id: string;
+  games_count: number;
+  total_fouls: number;
+  foul_counts_by_type: Record<string, number>;
+  fouls_per_100_frames: number;
+  avg_decision_quality_score: number;
+  risk_index: number;
+  defensive_discipline: number;
+  contact_frequency?: number;
+  last_updated?: string;
+}
+
+/**
+ * Crew SkillDNA Profile
+ * Aggregated performance metrics for an officiating crew
+ */
+export interface CrewSkillProfile {
+  crew_id: string;
+  games_count: number;
+  avg_rotation_quality: number;
+  avg_fairness_index: number;
+  avg_consistency_signal: number;
+  late_rotation_count: number;
+  misaligned_rotation_count: number;
+  last_updated?: string;
+}
+
+/**
+ * Game Officiating Summary
+ * League-level aggregates for a specific game
+ */
+export interface GameOfficiatingSummary {
+  game_id: string;
+  events_count: number;
+  candidate_foul_count: number;
+  ref_mechanics_count?: number;
+  crew_rotation_count?: number;
+  fairness_index_avg: number;
+  consistency_signal_avg: number;
+  regional_coverage_quality: number;
+  occlusion_frequency: number;
+}
+
+// Legacy SkillDNA types (for backward compatibility)
 export interface SkillDNAProfile {
   id: string;
   actor_id: string;
