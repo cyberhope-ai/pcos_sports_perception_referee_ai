@@ -1,8 +1,8 @@
-# PCOS Sports Perception Referee AI
+# PCOS Sports Perception Referee AI + RefQuest 2.0
 
-**Version**: 1.0 (Phase 8)
-**Status**: ✅ Functional Backend + Agent Bus Integration
-**Last Updated**: November 21, 2025
+**Version**: 2.0 (Phase 12+)
+**Status**: ✅ Full Platform + RefQuest 2.0 PCOS-Native Skill Verification
+**Last Updated**: December 2, 2025
 
 ---
 
@@ -32,10 +32,31 @@ pcos_sports_perception_referee_ai/
 ├── database.py                  # PostgreSQL database connection
 ├── perception/                  # Computer vision modules (placeholder)
 ├── skilldna/                    # SkillDNA metrics calculation (placeholder)
+├── pcos_bridge/                 # PCOS MCP integration
+│   ├── __init__.py
+│   └── mcp_client.py           # MCP client for PCOS kernel
+├── ingestion/                   # Video ingestion pipelines
+│   ├── video_processor.py      # Video processing logic
+│   └── youtube_ingest.py       # YouTube video ingestion
 ├── tools/                       # CLI tools for ingestion and monitoring
 │   ├── ingest_video.py         # Video ingestion CLI tool (Phase 8)
-│   └── check_game_status.py    # Game status checker CLI tool (Phase 8)
-├── alembic/                     # Database migrations
+│   ├── check_game_status.py    # Game status checker CLI tool (Phase 8)
+│   └── youtube_ingest.py       # YouTube ingestion CLI
+├── system_validator/            # System validation utilities
+├── refquest-ui/                 # React frontend for RefQuest
+│   └── src/refquest/           # RefQuest UI components
+│       ├── components/         # UI components (Ingestion, Review, Control)
+│       ├── pcos/               # PCOS event bus integration
+│       ├── api/                # API clients
+│       └── state/              # State management (Zustand)
+├── refquest_v2/                 # RefQuest 2.0 PCOS-Native Platform
+│   ├── run_demo.py             # Interactive demo
+│   ├── backend/                # Full backend implementation
+│   └── tests/                  # E2E test suite
+├── docs/                        # Documentation
+├── migrations/                  # Database migrations
+├── alembic/                     # Alembic migrations
+├── docker-compose.yml           # Docker deployment
 ├── requirements.txt             # Python dependencies
 └── README.md                    # This file
 ```
@@ -464,6 +485,204 @@ psql $DATABASE_URL -c "UPDATE games SET status='completed' WHERE id='<game_id>';
 - 🔄 Frontend UI for viewing games and clips
 - 🔄 Multi-game batch analysis
 - 🔄 Automatic clip tagging and search
+
+### Phase 12+ (✅ Complete)
+- ✅ RefQuest 2.0 PCOS-Native Skill Verification Platform
+- ✅ SkillDNA Engine with mastery tracking and decay models
+- ✅ Quest Definition Engine with schema-based tasks
+- ✅ Badge System with 20 achievement definitions
+- ✅ TwinFlow integration for multimodal evidence capture
+- ✅ QSurface packet generation for semantic tracing
+- ✅ FastAPI backend with 19 REST endpoints + WebSocket
+- ✅ React UI components (QuestCard, ChallengeView, SkillProfile)
+
+---
+
+## 🎮 RefQuest 2.0 — PCOS-Native Skill Verification Platform
+
+RefQuest 2.0 is a complete skill verification system that integrates with PCOS (PrecognitionOS) to provide:
+
+- **Quest Definitions**: Schema-based task templates with steps, evidence requirements, and skill targets
+- **Challenge Execution**: Full lifecycle management from briefing to completion
+- **SkillDNA Engine**: Mastery vectors with learning curves, decay models, and skill profiles
+- **TwinFlow Integration**: Multi-camera video capture and evidence processing
+- **Badge System**: Achievement tracking with rarity tiers and XP awards
+- **QSurface Packets**: Semantic tracing for the learning journey
+
+### RefQuest 2.0 Architecture
+
+```
+User → Camera → TwinFlow → TwinFlowPacket → QSurface → SkillDNA Engine
+                    ↓
+              EvidenceProcessor → StepVerification → MasteryUpdate → BadgeAward
+```
+
+### RefQuest 2.0 Project Structure
+
+```
+refquest_v2/
+├── __init__.py
+├── run_demo.py                  # Interactive demo launcher
+├── backend/
+│   ├── __init__.py              # Main exports
+│   ├── refquest_engine.py       # Core orchestrator
+│   ├── quest_schema.py          # Quest/Step definitions (~520 lines)
+│   ├── quest_library.py         # Quest management & search
+│   ├── sample_quests.py         # Demo quests (omelette, cable, safety)
+│   ├── pcos_integration.py      # QSurface packet generation
+│   ├── api/
+│   │   ├── main.py              # FastAPI with 19 endpoints + WebSocket
+│   │   ├── quest_api.py         # Quest CRUD operations
+│   │   └── evaluate_api.py      # Step evaluation endpoints
+│   ├── controllers/
+│   │   └── challenge_controller.py  # Full execution flow
+│   ├── ingestion/
+│   │   ├── twinflow_bridge.py   # TwinFlow capture sessions
+│   │   └── evidence_processor.py # Step verification logic
+│   ├── scoring/
+│   │   ├── skilldna_engine.py   # Profile management
+│   │   ├── mastery_tracker.py   # Learning curves & decay
+│   │   └── badge_system.py      # 20 badge definitions
+│   └── models/
+│       ├── quest.py             # Quest data models
+│       ├── evidence.py          # Evidence data models
+│       └── skill.py             # Skill data models
+└── tests/
+    └── test_refquest_e2e.py     # Comprehensive E2E tests
+```
+
+### Run RefQuest 2.0 Demo
+
+```bash
+cd pcos_sports_perception_referee_ai/refquest_v2
+PYTHONPATH=.. python3 run_demo.py
+```
+
+**Demo Output:**
+```
+============================================================
+  RefQuest 2.0 — PCOS-Native Skill Verification Demo
+  PrecognitionOS Studio | CyberHopeAI
+============================================================
+
+────────────────────────────────────────
+  1. Quest Definition Engine
+────────────────────────────────────────
+  Loaded 3 sample quests:
+    • Make a Basic Omelette
+      Category: training
+      Difficulty: beginner
+      Steps: 6
+      Skills: cooking, heat_control, folding
+
+────────────────────────────────────────
+  2. Challenge Execution Flow
+────────────────────────────────────────
+  Starting challenge...
+  ✓ Challenge ID: chall-abc123
+  ✓ Phase: briefing
+
+  User acknowledges briefing...
+  ✓ Phase: active
+  ✓ Started at: 2025-12-02T13:43:00
+
+────────────────────────────────────────
+  3. Skill Assessment (SkillDNA)
+────────────────────────────────────────
+  Recording skill assessments:
+    • cooking: 85% → Mastery: 0.85 (master)
+    • heat_control: 78% → Mastery: 0.78 (expert)
+    • folding: 92% → Mastery: 0.92 (master)
+    • plating: 88% → Mastery: 0.88 (master)
+
+────────────────────────────────────────
+  4. Badge System
+────────────────────────────────────────
+  Available badges: 20
+  Badges earned this session: 2
+    • Skill Master (rare)
+      Achieved Master level in any skill
+
+────────────────────────────────────────
+  5. PCOS Integration (QSurface Packets)
+────────────────────────────────────────
+  Emitted: quest_start
+    Packet ID: rqp-abc123def456
+    Intent: user_starts_skill_verification
+
+  PCOS Stats:
+    Total packets: 3
+    QSurface available: False
+    TwinFlow available: False
+
+────────────────────────────────────────
+  6. Challenge Completion
+────────────────────────────────────────
+  Completing challenge...
+  ✓ Phase: complete
+  ✓ Overall Score: 85.8%
+  ✓ Passed: True
+  ✓ Time: 0.1s
+
+============================================================
+  RefQuest 2.0 Demo Complete!
+============================================================
+```
+
+### Run RefQuest 2.0 Tests
+
+```bash
+cd pcos_sports_perception_referee_ai/refquest_v2
+PYTHONPATH=.. python3 -m pytest tests/ -v
+```
+
+### Start RefQuest 2.0 API Server
+
+```bash
+cd pcos_sports_perception_referee_ai/refquest_v2
+uvicorn backend.api.main:app --reload --port 8089
+
+# API Docs: http://localhost:8089/docs
+```
+
+### RefQuest 2.0 API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/quests` | GET | List all quests |
+| `/quests/{id}` | GET | Get quest details |
+| `/quests/search` | GET | Search quests by query |
+| `/challenges` | POST | Start a new challenge |
+| `/challenges/{id}` | GET | Get challenge progress |
+| `/challenges/{id}/begin` | POST | Begin active phase |
+| `/challenges/{id}/complete` | POST | Complete challenge |
+| `/skills/{user_id}/profile` | GET | Get user's SkillDNA profile |
+| `/skills/{user_id}/mastery` | GET | Get mastery levels |
+| `/badges` | GET | List all badge definitions |
+| `/badges/{user_id}` | GET | Get user's earned badges |
+| `/ws/challenge/{id}` | WebSocket | Real-time challenge updates |
+
+### SkillDNA Mastery Levels
+
+| Level | Score Range | Description |
+|-------|-------------|-------------|
+| Novice | 0.0 - 0.2 | Just starting out |
+| Apprentice | 0.2 - 0.4 | Learning the basics |
+| Journeyman | 0.4 - 0.6 | Developing competence |
+| Expert | 0.6 - 0.8 | Highly skilled |
+| Master | 0.8 - 0.95 | Near perfection |
+| Grandmaster | 0.95+ | Elite level |
+
+### Badge Rarity Tiers
+
+| Rarity | XP Award | Examples |
+|--------|----------|----------|
+| Common | 10 | First Quest, First Step |
+| Uncommon | 25 | Consistent Performer, Quick Learner |
+| Rare | 50 | Skill Master, Versatile Performer |
+| Epic | 100 | Quest Legend, Skill Grandmaster |
+| Legendary | 250 | PCOS Champion, Ultimate Master |
 
 ---
 
