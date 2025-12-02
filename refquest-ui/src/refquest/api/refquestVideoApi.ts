@@ -38,6 +38,28 @@ export interface VideoInfo {
   fps: number;
 }
 
+// Phase 12.9: Multi-angle video support
+export interface VideoSource {
+  id: string;
+  label: string;
+  sourceType: string;
+  url: string;
+}
+
+// Phase 12.9: Extended game event for event list
+export interface GameEvent {
+  id: string;
+  gameId: string;
+  eventType: string;
+  description?: string;
+  period?: number;
+  gameTimeSeconds: number;
+  actorId?: string;
+  x?: number;
+  y?: number;
+  severity?: string | number;
+}
+
 /**
  * Fetch game video URL and metadata
  */
@@ -165,4 +187,188 @@ function generateMockClips(gameId: string): GameClip[] {
   }
 
   return clips.sort((a, b) => a.start_time - b.start_time);
+}
+
+// ============================================================================
+// Phase 12.9: Multi-Angle Video Support
+// ============================================================================
+
+/**
+ * Fetch available video sources (angles) for a game
+ */
+export async function fetchGameVideoSources(gameId: string): Promise<VideoSource[]> {
+  try {
+    const response = await fetch(`${API_BASE}/games/${gameId}/video-sources`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch video sources: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn('[RefQuestVideoAPI] Using mock video sources:', error);
+    // Return mock multi-angle sources for development
+    return [
+      {
+        id: 'main',
+        label: 'Main',
+        sourceType: 'broadcast',
+        url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+      },
+      {
+        id: 'baseline',
+        label: 'Baseline',
+        sourceType: 'camera',
+        url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+      },
+      {
+        id: 'sideline',
+        label: 'Sideline',
+        sourceType: 'camera',
+        url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      },
+    ];
+  }
+}
+
+// ============================================================================
+// Phase 12.9: Event CRUD Operations
+// ============================================================================
+
+/**
+ * Fetch all events for a game (converted from timeline events)
+ */
+export async function fetchGameEvents(gameId: string): Promise<GameEvent[]> {
+  try {
+    const response = await fetch(`${API_BASE}/games/${gameId}/events`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch events: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn('[RefQuestVideoAPI] Using mock events:', error);
+    // Convert mock timeline events to GameEvent format
+    const timelineEvents = generateMockTimelineEvents(gameId);
+    return timelineEvents.map(e => ({
+      id: e.id,
+      gameId: e.game_id,
+      eventType: e.event_type,
+      description: e.description,
+      period: e.quarter,
+      gameTimeSeconds: e.timestamp,
+      x: e.coordinates?.x,
+      y: e.coordinates?.y,
+      severity: e.confidence > 0.9 ? 'high' : e.confidence > 0.7 ? 'medium' : 'low',
+    }));
+  }
+}
+
+/**
+ * Update an event
+ * TODO: Implement backend endpoint
+ */
+export async function updateEvent(
+  eventId: string,
+  patch: Partial<GameEvent>
+): Promise<GameEvent | null> {
+  try {
+    const response = await fetch(`${API_BASE}/events/${eventId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update event: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn('[RefQuestVideoAPI] Event update failed (mock):', error);
+    // Return mock updated event for frontend state management
+    return { id: eventId, gameId: '', gameTimeSeconds: 0, eventType: '', ...patch };
+  }
+}
+
+/**
+ * Delete an event
+ * TODO: Implement backend endpoint
+ */
+export async function deleteEvent(eventId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE}/events/${eventId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete event: ${response.status}`);
+    }
+    return true;
+  } catch (error) {
+    console.warn('[RefQuestVideoAPI] Event delete failed (mock):', error);
+    // Return success for frontend state management
+    return true;
+  }
+}
+
+// ============================================================================
+// Phase 12.9: Clip Operations
+// ============================================================================
+
+/**
+ * Create a new clip from existing clip or manually
+ * TODO: Implement backend endpoint
+ */
+export async function createClip(
+  gameId: string,
+  clipData: {
+    startTime: number;
+    endTime: number;
+    label?: string;
+    eventId?: string;
+    baseClipId?: string;
+  }
+): Promise<GameClip | null> {
+  try {
+    const response = await fetch(`${API_BASE}/games/${gameId}/clips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clipData),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to create clip: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn('[RefQuestVideoAPI] Clip creation failed (mock):', error);
+    // Return mock clip for frontend state management
+    const newId = `clip-${gameId}-${Date.now()}`;
+    return {
+      id: newId,
+      game_id: gameId,
+      event_id: clipData.eventId || '',
+      start_time: clipData.startTime,
+      end_time: clipData.endTime,
+      label: clipData.label || 'New Clip',
+    };
+  }
+}
+
+/**
+ * Update an existing clip
+ * TODO: Implement backend endpoint
+ */
+export async function updateClip(
+  clipId: string,
+  patch: Partial<GameClip>
+): Promise<GameClip | null> {
+  try {
+    const response = await fetch(`${API_BASE}/clips/${clipId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update clip: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn('[RefQuestVideoAPI] Clip update failed (mock):', error);
+    return { id: clipId, game_id: '', event_id: '', start_time: 0, end_time: 0, label: '', ...patch };
+  }
 }

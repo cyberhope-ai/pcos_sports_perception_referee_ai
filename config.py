@@ -43,6 +43,7 @@ class Settings(BaseSettings):
 
     # Video processing
     MAX_VIDEO_SIZE_MB: int = 500
+    VIDEO_STORAGE_DIR: str = os.getenv("VIDEO_STORAGE_DIR", "./videos")
     FRAME_BATCH_SIZE: int = int(os.getenv("FRAME_BATCH_SIZE", "16"))  # Batch size for GPU inference
     VIDEO_FPS_SAMPLING: int = int(os.getenv("VIDEO_FPS_SAMPLING", "0"))  # 0 = process all frames
 
@@ -55,6 +56,12 @@ class Settings(BaseSettings):
     CLIP_OUTPUT_DIR: str = os.getenv("CLIP_OUTPUT_DIR", "./clips")
     CLIP_PADDING_BEFORE: float = float(os.getenv("CLIP_PADDING_BEFORE", "3.0"))  # seconds before event
     CLIP_PADDING_AFTER: float = float(os.getenv("CLIP_PADDING_AFTER", "5.0"))  # seconds after event
+
+    # Phase 9C: Teaching Package Integration
+    TEACHING_PACKAGES_BASE_DIR: str = os.getenv(
+        "TEACHING_PACKAGES_BASE_DIR",
+        "/home/cyberhope/Documents/omniscient/agent_bus/messages/logs/teaching_packages"
+    )
 
     class Config:
         env_file = ".env"

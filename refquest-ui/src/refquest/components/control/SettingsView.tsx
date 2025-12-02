@@ -4,7 +4,8 @@
  * Application settings and configuration
  */
 
-import { Save, Server, Database, Video, Bell, Shield } from 'lucide-react';
+import { Save, Server, Database, Video, Bell, Shield, Activity, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export function SettingsView() {
   return (
@@ -16,6 +17,25 @@ export function SettingsView() {
       </div>
 
       <div className="space-y-6">
+        {/* System Diagnostics Link (Phase 13.3) */}
+        <Link
+          to="/refquest/settings/diagnostics"
+          className="block bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden hover:border-cyan-500/50 transition-colors group"
+        >
+          <div className="px-5 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-white font-medium group-hover:text-cyan-400 transition-colors">System Diagnostics</h3>
+                <p className="text-sm text-slate-500">Validate GPU, CUDA, FFmpeg, YOLO, and other dependencies</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition-colors" />
+          </div>
+        </Link>
+
         {/* API Configuration */}
         <SettingsSection
           title="API Configuration"

@@ -13,6 +13,10 @@
 export const ENABLE_PCOS_EVENT_LOG = true;
 const MAX_EVENT_HISTORY = 100;
 
+// MCP Kernel WebSocket endpoint (Phase 13.2)
+const MCP_WS_URL = 'ws://127.0.0.1:7890/telemetry';
+const MCP_RECONNECT_INTERVAL = 5000; // 5 seconds
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -40,6 +44,20 @@ export const PCOS_EVENT_TYPES = {
     RULING_SUBMITTED: 'OFFICIATING.RULING.SUBMITTED',
     RULING_CONFIRMED: 'OFFICIATING.RULING.CONFIRMED',
     ANNOTATION_ADDED: 'OFFICIATING.ANNOTATION.ADDED',
+    // Phase 12.9: Video events
+    VIDEO: {
+      ANGLE_CHANGED: 'OFFICIATING.VIDEO.ANGLE_CHANGED',
+      CLIP_SELECTED: 'OFFICIATING.VIDEO.CLIP_SELECTED',
+      CLIP_CREATED: 'OFFICIATING.VIDEO.CLIP_CREATED',
+      CLIP_TRIMMED: 'OFFICIATING.VIDEO.CLIP_TRIMMED',
+      PLAYBACK_POSITION_CHANGED: 'OFFICIATING.VIDEO.PLAYBACK_POSITION_CHANGED',
+    },
+    // Phase 12.9: Event management
+    EVENT: {
+      DELETED: 'OFFICIATING.EVENT.DELETED',
+      UPDATED: 'OFFICIATING.EVENT.UPDATED',
+      NOTE_ADDED: 'OFFICIATING.EVENT.NOTE_ADDED',
+    },
   },
   // AI Events
   AI: {
@@ -74,6 +92,14 @@ export const PCOS_EVENT_TYPES = {
   NAV: {
     VIEW_CHANGED: 'NAV.VIEW.CHANGED',
     FILTER_APPLIED: 'NAV.FILTER.APPLIED',
+  },
+  // Phase 13.3: System Events
+  SYSTEM: {
+    VALIDATION_STARTED: 'SYSTEM.VALIDATION.STARTED',
+    VALIDATION_COMPLETED: 'SYSTEM.VALIDATION.COMPLETED',
+    VALIDATION_FAILED: 'SYSTEM.VALIDATION.FAILED',
+    DEPENDENCY_WARNING: 'SYSTEM.DEPENDENCY.WARNING',
+    DEPENDENCY_ERROR: 'SYSTEM.DEPENDENCY.ERROR',
   },
 } as const;
 
@@ -240,4 +266,232 @@ export function aiActor(persona?: string): PcosActor {
 
 export function humanActor(id?: string): PcosActor {
   return { type: 'HUMAN', id };
+}
+
+// ============================================================================
+// Phase 13.2: MCP Kernel WebSocket Integration
+// ============================================================================
+
+/**
+ * MCP WebSocket connection state
+ */
+export interface McpConnectionState {
+  connected: boolean;
+  url: string;
+  reconnectAttempts: number;
+  lastMessage: Date | null;
+}
+
+let mcpSocket: WebSocket | null = null;
+let mcpReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let mcpConnectionState: McpConnectionState = {
+  connected: false,
+  url: MCP_WS_URL,
+  reconnectAttempts: 0,
+  lastMessage: null,
+};
+
+// Listeners for inbound MCP events
+const mcpInboundListeners: Set<(event: Record<string, unknown>) => void> = new Set();
+
+/**
+ * Connect to MCP Kernel WebSocket
+ * Receives events from the PCOS MCP Kernel for:
+ * - COMMITTEE_EVENT, COMMITTEE_ROUND
+ * - QSURFACE, SYNC_RECORD, SKILL_SNAPSHOT
+ * - AGENT_STATUS, FLEET_SNAPSHOT
+ */
+export function connectToMcpKernel(): void {
+  if (mcpSocket && mcpSocket.readyState === WebSocket.OPEN) {
+    console.log('[PCOS/MCP] Already connected');
+    return;
+  }
+
+  try {
+    console.log(`[PCOS/MCP] Connecting to ${MCP_WS_URL}...`);
+    mcpSocket = new WebSocket(MCP_WS_URL);
+
+    mcpSocket.onopen = () => {
+      console.log('%c[PCOS/MCP] Connected to MCP Kernel', 'color: #22c55e; font-weight: bold;');
+      mcpConnectionState = {
+        ...mcpConnectionState,
+        connected: true,
+        reconnectAttempts: 0,
+      };
+
+      // Clear reconnect timer if set
+      if (mcpReconnectTimer) {
+        clearTimeout(mcpReconnectTimer);
+        mcpReconnectTimer = null;
+      }
+    };
+
+    mcpSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        mcpConnectionState.lastMessage = new Date();
+
+        if (ENABLE_PCOS_EVENT_LOG) {
+          console.log(
+            '%c[PCOS/MCP] Inbound:',
+            'color: #f59e0b; font-weight: bold;',
+            data.type || 'UNKNOWN',
+            data
+          );
+        }
+
+        // Notify all MCP listeners
+        mcpInboundListeners.forEach((listener) => {
+          try {
+            listener(data);
+          } catch (error) {
+            console.error('[PCOS/MCP] Listener error:', error);
+          }
+        });
+
+        // Also publish as local PCOS event for unified handling
+        if (data.type) {
+          const localEvent = buildEvent(
+            `MCP.${data.type}`,
+            { mcpPayload: data },
+            { type: 'SYSTEM' }
+          );
+          publishEvent(localEvent);
+        }
+      } catch (error) {
+        console.error('[PCOS/MCP] Failed to parse message:', error);
+      }
+    };
+
+    mcpSocket.onerror = (error) => {
+      console.error('[PCOS/MCP] WebSocket error:', error);
+    };
+
+    mcpSocket.onclose = (event) => {
+      console.log(`[PCOS/MCP] Disconnected (code: ${event.code})`);
+      mcpConnectionState.connected = false;
+      mcpSocket = null;
+
+      // Auto-reconnect
+      scheduleReconnect();
+    };
+  } catch (error) {
+    console.error('[PCOS/MCP] Failed to connect:', error);
+    scheduleReconnect();
+  }
+}
+
+/**
+ * Schedule reconnection to MCP Kernel
+ */
+function scheduleReconnect(): void {
+  if (mcpReconnectTimer) {
+    return; // Already scheduled
+  }
+
+  mcpConnectionState.reconnectAttempts++;
+  const delay = Math.min(
+    MCP_RECONNECT_INTERVAL * Math.pow(1.5, mcpConnectionState.reconnectAttempts - 1),
+    30000 // Max 30 seconds
+  );
+
+  console.log(`[PCOS/MCP] Reconnecting in ${delay}ms (attempt ${mcpConnectionState.reconnectAttempts})...`);
+
+  mcpReconnectTimer = setTimeout(() => {
+    mcpReconnectTimer = null;
+    connectToMcpKernel();
+  }, delay);
+}
+
+/**
+ * Disconnect from MCP Kernel
+ */
+export function disconnectFromMcpKernel(): void {
+  if (mcpReconnectTimer) {
+    clearTimeout(mcpReconnectTimer);
+    mcpReconnectTimer = null;
+  }
+
+  if (mcpSocket) {
+    mcpSocket.close();
+    mcpSocket = null;
+  }
+
+  mcpConnectionState = {
+    ...mcpConnectionState,
+    connected: false,
+    reconnectAttempts: 0,
+  };
+
+  console.log('[PCOS/MCP] Disconnected');
+}
+
+/**
+ * Send event to MCP Kernel via WebSocket
+ */
+export function sendToMcpKernel(event: Record<string, unknown>): boolean {
+  if (!mcpSocket || mcpSocket.readyState !== WebSocket.OPEN) {
+    console.warn('[PCOS/MCP] Not connected, cannot send event');
+    return false;
+  }
+
+  try {
+    mcpSocket.send(JSON.stringify(event));
+    if (ENABLE_PCOS_EVENT_LOG) {
+      console.log(
+        '%c[PCOS/MCP] Outbound:',
+        'color: #06b6d4; font-weight: bold;',
+        event
+      );
+    }
+    return true;
+  } catch (error) {
+    console.error('[PCOS/MCP] Failed to send:', error);
+    return false;
+  }
+}
+
+/**
+ * Subscribe to inbound MCP events
+ */
+export function subscribeToMcpEvents(
+  listener: (event: Record<string, unknown>) => void
+): () => void {
+  mcpInboundListeners.add(listener);
+  return () => {
+    mcpInboundListeners.delete(listener);
+  };
+}
+
+/**
+ * Subscribe to specific MCP event types
+ */
+export function subscribeToMcpEventType(
+  typePrefix: string,
+  listener: (event: Record<string, unknown>) => void
+): () => void {
+  const filteredListener = (event: Record<string, unknown>) => {
+    const eventType = event.type as string | undefined;
+    if (eventType && eventType.startsWith(typePrefix)) {
+      listener(event);
+    }
+  };
+  mcpInboundListeners.add(filteredListener);
+  return () => {
+    mcpInboundListeners.delete(filteredListener);
+  };
+}
+
+/**
+ * Get current MCP connection state
+ */
+export function getMcpConnectionState(): McpConnectionState {
+  return { ...mcpConnectionState };
+}
+
+/**
+ * Check if connected to MCP Kernel
+ */
+export function isMcpConnected(): boolean {
+  return mcpConnectionState.connected;
 }

@@ -1,10 +1,11 @@
 /**
- * Phase 12.1: Video Player Component
+ * Phase 12.9: Video Player Component
  *
- * Full-featured video player with playback controls, speed adjustment, and frame stepping
+ * Full-featured video player with playback controls, speed adjustment, frame stepping,
+ * and multi-angle video support
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import {
   Play,
   Pause,
@@ -16,18 +17,31 @@ import {
   ChevronRight,
   Maximize,
   Loader2,
+  Camera,
 } from 'lucide-react';
 import { useVideoPlayerStore, formatTimeFull } from '../../state/useVideoPlayerStore';
+import { type VideoSource } from '../../api/refquestVideoApi';
 
 interface VideoPlayerProps {
   videoUrl?: string;
+  sources?: VideoSource[];
+  selectedSourceId?: string;
+  onSourceChange?: (sourceId: string) => void;
   onTimeUpdate?: (time: number) => void;
 }
 
 const PLAYBACK_RATES = [0.25, 0.5, 1, 1.5, 2];
 
-export function VideoPlayer({ videoUrl, onTimeUpdate }: VideoPlayerProps) {
+export function VideoPlayer({
+  videoUrl,
+  sources,
+  selectedSourceId,
+  onSourceChange,
+  onTimeUpdate,
+}: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [showAngleSelector, setShowAngleSelector] = useState(false);
+  const pendingSeekRef = useRef<number | null>(null);
 
   const {
     currentTime,
@@ -71,8 +85,22 @@ export function VideoPlayer({ videoUrl, onTimeUpdate }: VideoPlayerProps) {
     if (videoRef.current) {
       updateDuration(videoRef.current.duration);
       setLoading(false);
+      // Resume playback position after source change
+      if (pendingSeekRef.current !== null) {
+        videoRef.current.currentTime = pendingSeekRef.current;
+        pendingSeekRef.current = null;
+      }
     }
   }, [updateDuration, setLoading]);
+
+  // Handle angle/source change - preserve current time
+  const handleSourceChange = useCallback((sourceId: string) => {
+    if (videoRef.current) {
+      pendingSeekRef.current = videoRef.current.currentTime;
+    }
+    onSourceChange?.(sourceId);
+    setShowAngleSelector(false);
+  }, [onSourceChange]);
 
   const handlePlay = useCallback(() => play(), [play]);
   const handlePause = useCallback(() => pause(), [pause]);
@@ -153,6 +181,47 @@ export function VideoPlayer({ videoUrl, onTimeUpdate }: VideoPlayerProps) {
           <Play className="w-16 h-16 text-slate-600 mb-4" />
           <p className="text-slate-500">No video loaded</p>
           <p className="text-xs text-slate-600 mt-1">Select a game to begin review</p>
+        </div>
+      )}
+
+      {/* Multi-Angle Selector (Phase 12.9) */}
+      {sources && sources.length > 1 && (
+        <div className="absolute top-4 left-4 z-20">
+          <button
+            onClick={() => setShowAngleSelector(!showAngleSelector)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+              showAngleSelector
+                ? 'bg-cyan-500 text-white'
+                : 'bg-slate-800/90 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            <Camera className="w-4 h-4" />
+            <span className="text-sm font-medium">
+              {sources.find(s => s.id === selectedSourceId)?.label || 'Angle'}
+            </span>
+          </button>
+
+          {showAngleSelector && (
+            <div className="absolute top-full left-0 mt-2 bg-slate-800/95 border border-slate-700 rounded-lg overflow-hidden min-w-[140px]">
+              {sources.map((source) => (
+                <button
+                  key={source.id}
+                  onClick={() => handleSourceChange(source.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                    source.id === selectedSourceId
+                      ? 'bg-cyan-500/20 text-cyan-400'
+                      : 'text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  <Camera className="w-4 h-4" />
+                  <div className="text-left">
+                    <div className="font-medium">{source.label}</div>
+                    <div className="text-xs text-slate-500">{source.sourceType}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

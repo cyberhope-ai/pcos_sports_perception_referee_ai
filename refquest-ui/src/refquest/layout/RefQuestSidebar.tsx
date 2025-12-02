@@ -80,7 +80,7 @@ export function RefQuestSidebar() {
             Main
           </p>
           <NavItem to="/refquest" icon={<Home className="w-5 h-5" />} label="Games & Sessions" />
-          <NavItem to="/refquest/ingestion" icon={<Upload className="w-5 h-5" />} label="Ingestion" badge={2} />
+          <NavItem to="/refquest/ingestion" icon={<Upload className="w-5 h-5" />} label="Ingest Video" />
         </div>
 
         {/* Game Context Navigation (shown when in game) */}

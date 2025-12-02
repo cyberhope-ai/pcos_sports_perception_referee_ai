@@ -1,149 +1,116 @@
 /**
- * Phase 12.5: Ingestion Panel
+ * Phase 12.6: Ingestion Panel (Tabbed Container)
  *
- * Video upload and processing status view
- * Enhanced with PCOS Event Bus integration
+ * Main ingestion view with tabs for YouTube, Upload, and Monitor
+ * Replaces Phase 12.5 simple upload panel
  */
 
-import { useState } from 'react';
-import { Upload, FileVideo, Clock, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
-import { mockIngestionJobs } from '../../mock/data';
-import { emitPcosEvent, PCOS_EVENT_TYPES, HUMAN_ACTOR } from '../../pcos/pcosEventBus';
+import { Youtube, Upload, Activity, Link, Cloud } from 'lucide-react';
+import { useIngestionStore } from '../../state/useIngestionStore';
+import { YoutubeIngestPanel } from './YoutubeIngestPanel';
+import { FileUploadPanel } from './FileUploadPanel';
+import { UrlIngestPanel } from './UrlIngestPanel';
+import { CloudIngestPanel } from './CloudIngestPanel';
+import { IngestionMonitorPanel } from './IngestionMonitorPanel';
+
+type IngestionTab = 'youtube' | 'upload' | 'url' | 'cloud' | 'monitor';
+
+interface TabConfig {
+  id: IngestionTab;
+  label: string;
+  icon: React.ReactNode;
+  badge?: number;
+}
 
 export function IngestionPanel() {
-  const [isDragging, setIsDragging] = useState(false);
+  const { activeTab, setActiveTab, jobs } = useIngestionStore();
+
+  // Count active jobs for badge
+  const activeJobCount = jobs.filter((j) =>
+    ['uploading', 'downloading', 'processing', 'processing_skilldna', 'generating_clips'].includes(j.status)
+  ).length;
+
+  const tabs: TabConfig[] = [
+    {
+      id: 'youtube',
+      label: 'YouTube',
+      icon: <Youtube className="w-4 h-4" />,
+    },
+    {
+      id: 'upload',
+      label: 'Local File',
+      icon: <Upload className="w-4 h-4" />,
+    },
+    {
+      id: 'url',
+      label: 'URL Import',
+      icon: <Link className="w-4 h-4" />,
+    },
+    {
+      id: 'cloud',
+      label: 'Cloud',
+      icon: <Cloud className="w-4 h-4" />,
+    },
+    {
+      id: 'monitor',
+      label: 'Monitor',
+      icon: <Activity className="w-4 h-4" />,
+      badge: activeJobCount > 0 ? activeJobCount : undefined,
+    },
+  ];
 
   return (
-    <div className="p-6">
+    <div className="p-6 h-full overflow-y-auto">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Video Ingestion</h1>
-        <p className="text-slate-400 mt-1">Upload and process game footage</p>
-      </div>
-
-      {/* Upload Zone */}
-      <div
-        className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-          isDragging
-            ? 'border-cyan-500 bg-cyan-500/10'
-            : 'border-slate-700 bg-slate-900/30 hover:border-slate-600'
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragging(false);
-          // Emit PCOS event for video queued
-          const files = Array.from(e.dataTransfer.files);
-          files.forEach((file) => {
-            emitPcosEvent(
-              PCOS_EVENT_TYPES.INGESTION.VIDEO_QUEUED,
-              {
-                filename: file.name,
-                fileSize: file.size,
-                fileType: file.type,
-              },
-              HUMAN_ACTOR
-            );
-          });
-          // TODO: Handle file upload
-          console.log('[IngestionPanel] Files dropped:', files);
-        }}
-      >
-        <Upload className="w-12 h-12 mx-auto text-slate-500 mb-4" />
-        <p className="text-white font-medium mb-1">Drop video files here</p>
-        <p className="text-sm text-slate-500 mb-4">or click to browse</p>
-        <button className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors">
-          Select Files
-        </button>
-        <p className="text-xs text-slate-600 mt-4">
-          Supported: MP4, MOV, AVI · Max 500MB
+        <p className="text-slate-400 mt-1">
+          Import basketball game footage for AI analysis
         </p>
       </div>
 
-      {/* Processing Queue */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">Processing Queue</h2>
-          <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors">
-            <RefreshCw className="w-4 h-4" />
-            Refresh
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 p-1 bg-slate-900/50 border border-slate-800 rounded-xl mb-6">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all ${
+              activeTab === tab.id
+                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-white border border-cyan-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+            {tab.badge !== undefined && (
+              <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                activeTab === tab.id
+                  ? 'bg-cyan-500/30 text-cyan-300'
+                  : 'bg-yellow-500/20 text-yellow-400'
+              }`}>
+                {tab.badge}
+              </span>
+            )}
           </button>
-        </div>
+        ))}
+      </div>
 
-        <div className="space-y-3">
-          {mockIngestionJobs.map((job) => (
-            <IngestionJobCard key={job.id} job={job} />
-          ))}
-        </div>
-
-        {mockIngestionJobs.length === 0 && (
-          <div className="text-center py-8 text-slate-500">
-            <FileVideo className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No videos in queue</p>
-          </div>
-        )}
+      {/* Tab Content */}
+      <div className="min-h-0">
+        {activeTab === 'youtube' && <YoutubeIngestPanel />}
+        {activeTab === 'upload' && <FileUploadPanel />}
+        {activeTab === 'url' && <UrlIngestPanel />}
+        {activeTab === 'cloud' && <CloudIngestPanel />}
+        {activeTab === 'monitor' && <IngestionMonitorPanel />}
       </div>
     </div>
   );
 }
 
-function IngestionJobCard({ job }: { job: typeof mockIngestionJobs[0] }) {
-  const statusConfig: Record<string, { icon: typeof Clock; color: string; bg: string; animate?: boolean }> = {
-    queued: { icon: Clock, color: 'text-slate-400', bg: 'bg-slate-500/10' },
-    uploading: { icon: Upload, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    processing: { icon: RefreshCw, color: 'text-yellow-400', bg: 'bg-yellow-500/10', animate: true },
-    analyzing: { icon: RefreshCw, color: 'text-purple-400', bg: 'bg-purple-500/10', animate: true },
-    completed: { icon: CheckCircle, color: 'text-green-400', bg: 'bg-green-500/10' },
-    failed: { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-500/10' },
-  };
-
-  const config = statusConfig[job.status];
-  const StatusIcon = config.icon;
-
-  return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-      <div className="flex items-start gap-4">
-        {/* Status Icon */}
-        <div className={`w-10 h-10 rounded-lg ${config.bg} flex items-center justify-center flex-shrink-0`}>
-          <StatusIcon className={`w-5 h-5 ${config.color} ${config.animate ? 'animate-spin' : ''}`} />
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-white truncate">{job.video_filename}</h3>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${config.bg} ${config.color}`}>
-              {job.status}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">{job.stage}</p>
-
-          {/* Progress Bar */}
-          {job.status !== 'queued' && job.status !== 'completed' && job.status !== 'failed' && (
-            <div className="mt-2">
-              <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${job.status === 'analyzing' ? 'bg-purple-500' : 'bg-cyan-500'} transition-all`}
-                  style={{ width: `${job.progress}%` }}
-                />
-              </div>
-              <div className="flex justify-between mt-1">
-                <span className="text-xs text-slate-600">Progress</span>
-                <span className="text-xs text-slate-400">{job.progress}%</span>
-              </div>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {job.error && (
-            <p className="text-xs text-red-400 mt-2">{job.error}</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// Re-export for backwards compatibility if needed
+export { YoutubeIngestPanel } from './YoutubeIngestPanel';
+export { FileUploadPanel } from './FileUploadPanel';
+export { UrlIngestPanel } from './UrlIngestPanel';
+export { CloudIngestPanel } from './CloudIngestPanel';
+export { IngestionMonitorPanel } from './IngestionMonitorPanel';

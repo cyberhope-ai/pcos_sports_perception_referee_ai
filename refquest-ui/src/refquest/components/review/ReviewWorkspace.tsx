@@ -17,9 +17,11 @@ import {
   fetchGameVideoURL,
   fetchTimelineEvents,
   fetchGameClips,
+  fetchGameVideoSources,
   type TimelineEvent,
   type GameClip,
   type VideoInfo,
+  type VideoSource,
 } from '../../api/refquestVideoApi';
 import { useVideoPlayerStore } from '../../state/useVideoPlayerStore';
 import { Loader2, Film, List } from 'lucide-react';
@@ -32,6 +34,8 @@ export function ReviewWorkspace() {
 
   // API data state
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
+  const [videoSources, setVideoSources] = useState<VideoSource[]>([]);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [clips, setClips] = useState<GameClip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,22 +46,29 @@ export function ReviewWorkspace() {
 
   const game = mockGames.find(g => g.id === gameId);
 
-  // Fetch video, timeline, and clips data
+  // Fetch video, timeline, clips, and video sources data
   useEffect(() => {
     if (!gameId) return;
 
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const [video, timeline, gameClips] = await Promise.all([
+        const [video, timeline, gameClips, sources] = await Promise.all([
           fetchGameVideoURL(gameId),
           fetchTimelineEvents(gameId),
           fetchGameClips(gameId),
+          fetchGameVideoSources(gameId),
         ]);
 
         setVideoInfo(video);
         setTimelineEvents(timeline);
         setClips(gameClips);
+        setVideoSources(sources);
+
+        // Set initial selected source to first one
+        if (sources.length > 0 && !selectedSourceId) {
+          setSelectedSourceId(sources[0].id);
+        }
       } catch (error) {
         console.error('[ReviewWorkspace] Failed to load data:', error);
       } finally {
@@ -93,7 +104,41 @@ export function ReviewWorkspace() {
     if (clip) {
       setSelectedEventId(clip.event_id);
       setSelectedEventTimestamp(startTime);
+
+      // Emit PCOS event for clip selection
+      emitPcosEvent(
+        PCOS_EVENT_TYPES.OFFICIATING.VIDEO.CLIP_SELECTED,
+        {
+          clipId,
+          gameId,
+          startTime,
+          eventId: clip.event_id,
+          label: clip.label,
+        },
+        HUMAN_ACTOR
+      );
     }
+  };
+
+  // Handle video source/angle change
+  const handleSourceChange = (sourceId: string) => {
+    const previousSourceId = selectedSourceId;
+    const source = videoSources.find(s => s.id === sourceId);
+
+    setSelectedSourceId(sourceId);
+
+    // Emit PCOS event for angle change
+    emitPcosEvent(
+      PCOS_EVENT_TYPES.OFFICIATING.VIDEO.ANGLE_CHANGED,
+      {
+        gameId,
+        previousSourceId,
+        newSourceId: sourceId,
+        sourceLabel: source?.label || sourceId,
+        sourceType: source?.sourceType || 'unknown',
+      },
+      HUMAN_ACTOR
+    );
   };
 
   if (!game) {
@@ -125,7 +170,15 @@ export function ReviewWorkspace() {
           {/* Video Player */}
           <div className="flex-1 bg-black relative">
             <VideoPlayer
-              videoUrl={videoInfo?.url}
+              videoUrl={
+                // Use selected source URL if available, fallback to videoInfo
+                videoSources.length > 0 && selectedSourceId
+                  ? videoSources.find(s => s.id === selectedSourceId)?.url || videoInfo?.url
+                  : videoInfo?.url
+              }
+              sources={videoSources}
+              selectedSourceId={selectedSourceId || undefined}
+              onSourceChange={handleSourceChange}
               onTimeUpdate={(time) => {
                 // Find nearest event for potential auto-selection
                 const nearestEvent = timelineEvents.find(

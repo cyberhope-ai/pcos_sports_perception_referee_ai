@@ -18,7 +18,7 @@ torchvision>=0.15.0  # Required by ultralytics
 
 # Tracking - Phase 2 (ByteTrack via BoxMOT or ultralytics tracker)
 # Using ultralytics built-in ByteTrack tracker
-lap==0.4.0  # Linear assignment problem solver for tracking
+lapx  # Linear assignment problem solver for tracking (Python 3.12 compatible)
 
 # HTTP client (for PCOS bridge)
 httpx==0.25.2

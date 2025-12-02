@@ -32,6 +32,7 @@ import { RefSkillDashboard } from '../components/skilldna/RefSkillDashboard';
 // Control room
 import { ControlRoomView } from '../components/control/ControlRoomView';
 import { SettingsView } from '../components/control/SettingsView';
+import { SystemDiagnosticsView } from '../components/control/SystemDiagnosticsView';
 
 /**
  * RefQuest route definitions
@@ -47,6 +48,7 @@ import { SettingsView } from '../components/control/SettingsView';
  * - /refquest/referees/:refId          → RefSkillDashboard
  * - /refquest/control-room             → ControlRoomView
  * - /refquest/settings                 → SettingsView
+ * - /refquest/settings/diagnostics     → SystemDiagnosticsView (Phase 13.3)
  */
 export const refquestRoutes: RouteObject = {
   path: 'refquest',
@@ -99,6 +101,11 @@ export const refquestRoutes: RouteObject = {
     {
       path: 'settings',
       element: <SettingsView />,
+    },
+    // Phase 13.3: System Diagnostics
+    {
+      path: 'settings/diagnostics',
+      element: <SystemDiagnosticsView />,
     },
   ],
 };

@@ -18,12 +18,17 @@ import uuid
 Base = declarative_base()
 
 
-# Enums
+# =============================================================================
+# RefIQ v1.0 ENUMS
+# =============================================================================
+
 class ActorType(str, enum.Enum):
-    """Actor type enumeration"""
+    """Actor type enumeration - RefIQ v1.0"""
     player = "player"
     referee = "referee"
     ball = "ball"
+    coach = "coach"
+    other = "other"
 
 
 class SportType(str, enum.Enum):
@@ -32,12 +37,59 @@ class SportType(str, enum.Enum):
     football = "football"
 
 
+class SourceType(str, enum.Enum):
+    """Video source type enumeration - RefIQ v1.0"""
+    youtube = "youtube"
+    vimeo = "vimeo"
+    cloud = "cloud"
+    local = "local"
+    jetson = "jetson"
+    manual = "manual"
+    s3 = "s3"
+    gcs = "gcs"
+    azure = "azure"
+
+
+class ProcessingStatus(str, enum.Enum):
+    """Processing status enumeration - RefIQ v1.0"""
+    pending = "pending"
+    downloading = "downloading"
+    processing = "processing"
+    processing_skilldna = "processing_skilldna"
+    generating_clips = "generating_clips"
+    completed = "completed"
+    failed = "failed"
+
+
+class IngestionStatus(str, enum.Enum):
+    """Ingestion job status enumeration - RefIQ v1.0"""
+    pending = "pending"
+    downloading = "downloading"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+
+
 class EventType(str, enum.Enum):
-    """PCOSEvent type enumeration"""
+    """PCOSEvent type enumeration - RefIQ v1.0"""
     candidate_foul = "candidate_foul"
+    foul = "foul"
+    violation = "violation"
     ref_mechanics = "ref_mechanics"
     crew_rotation = "crew_rotation"
+    rotation = "rotation"
+    mechanics = "mechanics"
+    timeout = "timeout"
     clip_generated = "clip_generated"
+    other = "other"
+
+
+class EventSource(str, enum.Enum):
+    """Event source enumeration - RefIQ v1.0"""
+    detector = "detector"
+    human = "human"
+    committee = "committee"
+    external = "external"
 
 
 class SurfaceType(str, enum.Enum):
@@ -48,51 +100,117 @@ class SurfaceType(str, enum.Enum):
     league_view = "league_view"
 
 
-# Core Models
+class ReasoningType(str, enum.Enum):
+    """Event reasoning type enumeration - RefIQ v1.0"""
+    qsurface = "qsurface"
+    ai_assist = "ai_assist"
+    human_note = "human_note"
+    committee_summary = "committee_summary"
+
+
+class Perspective(str, enum.Enum):
+    """Perspective enumeration for reasoning - RefIQ v1.0"""
+    referee = "referee"
+    coach = "coach"
+    player = "player"
+    league = "league"
+    neutral = "neutral"
+
+
+class CommitteeStatus(str, enum.Enum):
+    """Committee case status enumeration - RefIQ v1.0"""
+    open = "open"
+    in_progress = "in_progress"
+    decided = "decided"
+    archived = "archived"
+
+
+class CommitteeRoundStatus(str, enum.Enum):
+    """Committee round status enumeration - RefIQ v1.0"""
+    open = "open"
+    closed = "closed"
+
+
+class SpeakerType(str, enum.Enum):
+    """Committee speaker type enumeration - RefIQ v1.0"""
+    human = "human"
+    ai_persona = "ai_persona"
+
+
+class SubjectType(str, enum.Enum):
+    """SkillDNA subject type enumeration - RefIQ v1.0"""
+    referee = "referee"
+    player = "player"
+    crew = "crew"
+
+
+class ClipCreatedBy(str, enum.Enum):
+    """Clip creator enumeration - RefIQ v1.0"""
+    system = "system"
+    human = "human"
+    committee = "committee"
+
+
+# =============================================================================
+# RefIQ v1.0 CORE MODELS
+# =============================================================================
+
 class Game(Base):
-    """Game model - represents a single game/scrimmage/practice session"""
+    """Game model - RefIQ v1.0 - represents a single game/scrimmage/practice session"""
     __tablename__ = "games"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     sport = Column(SQLEnum(SportType), nullable=False)
-    video_path = Column(String, nullable=False)
-    video_sources = Column(JSONB, default=list)  # List of video source URLs/paths
+    title = Column(String, nullable=True)  # RefIQ v1.0: Game title
+
+    # Source information - RefIQ v1.0
+    source_type = Column(SQLEnum(SourceType), nullable=True, default=SourceType.local)
+    video_path = Column(String, nullable=True)  # Nullable for YouTube downloads in progress
+    video_sources = Column(JSONB, default=list)  # List of video source URLs/paths (source-of-truth)
 
     # Metadata
     game_date = Column(DateTime, nullable=True)
     venue = Column(String, nullable=True)
     level = Column(String, nullable=True)  # e.g., "HS", "NCAA D1", "Semi-Pro"
+    game_metadata = Column(JSONB, nullable=True)  # RefIQ v1.0: teams, league, season, tags
 
-    # Processing status
+    # Processing status - RefIQ v1.0 expanded
+    processing_status = Column(SQLEnum(ProcessingStatus), default=ProcessingStatus.pending)
     ingested_at = Column(DateTime, default=datetime.utcnow)
     processed_at = Column(DateTime, nullable=True)
-    processing_status = Column(String, default="pending")  # pending, processing, completed, failed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     actors = relationship("Actor", back_populates="game", cascade="all, delete-orphan")
     events = relationship("Event", back_populates="game", cascade="all, delete-orphan")
     clips = relationship("Clip", back_populates="game", cascade="all, delete-orphan")
+    ingestion_jobs = relationship("IngestionJob", back_populates="game", cascade="all, delete-orphan")
 
     # Indices
     __table_args__ = (
         Index("idx_game_sport", "sport"),
         Index("idx_game_status", "processing_status"),
         Index("idx_game_date", "game_date"),
+        Index("idx_game_source_type", "source_type"),
     )
 
 
 class Actor(Base):
-    """Actor model - represents players, referees, and ball"""
+    """Actor model - RefIQ v1.0 - represents players, referees, ball, coaches"""
     __tablename__ = "actors"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     game_id = Column(UUID(as_uuid=True), ForeignKey("games.id"), nullable=False)
     actor_type = Column(SQLEnum(ActorType), nullable=False)
 
-    # Identity
+    # Identity - RefIQ v1.0
+    label = Column(String, nullable=True)  # RefIQ v1.0: "Ref A", "#32", "Ball", etc.
     jersey_number = Column(Integer, nullable=True)
     team_id = Column(String, nullable=True)
+    team = Column(String, nullable=True)  # RefIQ v1.0: team name or enum
     name = Column(String, nullable=True)
+    actor_metadata = Column(JSONB, nullable=True)  # RefIQ v1.0: additional actor metadata
 
     # Trajectory and detection data (stored as JSONB for efficiency)
     trajectory = Column(JSONB, default=list)  # List[Dict] with frame, x, y, timestamp
@@ -163,7 +281,7 @@ class Event(Base):
     location = Column(JSONB, nullable=True)  # {x, y, zone, etc.}
 
     # Event-specific metadata (varies by event_type)
-    metadata = Column(JSONB, default=dict)
+    event_metadata = Column(JSONB, default=dict)
 
     # For candidate_foul events
     foul_type = Column(String, nullable=True)  # "block", "charge", "illegal_screen", etc.
@@ -208,7 +326,7 @@ class QSurface(Base):
     persona_id = Column(String, nullable=True)  # ID of specific ref, coach, player, or league
 
     # Common fields
-    metadata = Column(JSONB, default=dict)
+    surface_metadata = Column(JSONB, default=dict)
 
     # RefereeQSurface specific
     call_made = Column(String, nullable=True)
@@ -462,4 +580,253 @@ class GameOfficiatingSummary(Base):
     __table_args__ = (
         Index("idx_game_summary_game", "game_id"),
         Index("idx_game_summary_updated", "last_updated"),
+    )
+
+
+# =============================================================================
+# RefIQ v1.0 NEW TABLES
+# =============================================================================
+
+class IngestionJob(Base):
+    """Ingestion Job model - RefIQ v1.0 - tracks each ingest operation"""
+    __tablename__ = "ingestion_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    game_id = Column(UUID(as_uuid=True), ForeignKey("games.id"), nullable=True)  # Nullable until game is created
+
+    # Source information
+    source_url = Column(Text, nullable=False)
+    source_type = Column(SQLEnum(SourceType), nullable=False)
+
+    # Status tracking
+    status = Column(SQLEnum(IngestionStatus), default=IngestionStatus.pending)
+    error_message = Column(Text, nullable=True)
+
+    # Timestamps
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    game = relationship("Game", back_populates="ingestion_jobs")
+
+    # Indices
+    __table_args__ = (
+        Index("idx_ingestion_job_game", "game_id"),
+        Index("idx_ingestion_job_status", "status"),
+        Index("idx_ingestion_job_created", "created_at"),
+    )
+
+
+class EventReasoning(Base):
+    """Event Reasoning model - RefIQ v1.0 - unified QSurfaces + AI Assist + human notes"""
+    __tablename__ = "event_reasoning"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    game_id = Column(UUID(as_uuid=True), ForeignKey("games.id"), nullable=False)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id"), nullable=False)
+
+    # Reasoning classification
+    reasoning_type = Column(SQLEnum(ReasoningType), nullable=False)
+    perspective = Column(SQLEnum(Perspective), nullable=False)
+
+    # Full reasoning content
+    payload = Column(JSONB, nullable=False)  # Full explanation, scores, factors, rule refs
+
+    # Creator info
+    created_by = Column(String, nullable=False)  # "system", "human", or persona name
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Indices
+    __table_args__ = (
+        Index("idx_event_reasoning_game", "game_id"),
+        Index("idx_event_reasoning_event", "event_id"),
+        Index("idx_event_reasoning_type", "reasoning_type"),
+        Index("idx_event_reasoning_perspective", "perspective"),
+    )
+
+
+class CommitteeCase(Base):
+    """Committee Case model - RefIQ v1.0 - committee governance cases"""
+    __tablename__ = "committee_cases"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    game_id = Column(UUID(as_uuid=True), ForeignKey("games.id"), nullable=False)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id"), nullable=False)
+
+    # Case status
+    status = Column(SQLEnum(CommitteeStatus), default=CommitteeStatus.open)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    rounds = relationship("CommitteeRound", back_populates="case", cascade="all, delete-orphan")
+    results = relationship("CommitteeResult", back_populates="case", cascade="all, delete-orphan")
+
+    # Indices
+    __table_args__ = (
+        Index("idx_committee_case_game", "game_id"),
+        Index("idx_committee_case_event", "event_id"),
+        Index("idx_committee_case_status", "status"),
+    )
+
+
+class CommitteeRound(Base):
+    """Committee Round model - RefIQ v1.0 - committee discussion rounds"""
+    __tablename__ = "committee_rounds"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    case_id = Column(UUID(as_uuid=True), ForeignKey("committee_cases.id"), nullable=False)
+
+    # Round info
+    round_index = Column(Integer, nullable=False)  # 1, 2, 3...
+    status = Column(SQLEnum(CommitteeRoundStatus), default=CommitteeRoundStatus.open)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    case = relationship("CommitteeCase", back_populates="rounds")
+    messages = relationship("CommitteeMessage", back_populates="round", cascade="all, delete-orphan")
+
+    # Indices
+    __table_args__ = (
+        Index("idx_committee_round_case", "case_id"),
+        Index("idx_committee_round_index", "round_index"),
+    )
+
+
+class CommitteeMessage(Base):
+    """Committee Message model - RefIQ v1.0 - committee discussion messages"""
+    __tablename__ = "committee_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    round_id = Column(UUID(as_uuid=True), ForeignKey("committee_rounds.id"), nullable=False)
+
+    # Speaker info
+    speaker_type = Column(SQLEnum(SpeakerType), nullable=False)
+    speaker_name = Column(String, nullable=False)  # "Strict Judge", "Flow Advocate", etc.
+
+    # Message content
+    content = Column(Text, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    round = relationship("CommitteeRound", back_populates="messages")
+
+    # Indices
+    __table_args__ = (
+        Index("idx_committee_message_round", "round_id"),
+        Index("idx_committee_message_speaker", "speaker_name"),
+    )
+
+
+class CommitteeResult(Base):
+    """Committee Result model - RefIQ v1.0 - final committee rulings"""
+    __tablename__ = "committee_results"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    case_id = Column(UUID(as_uuid=True), ForeignKey("committee_cases.id"), nullable=False)
+
+    # Result info
+    final_ruling = Column(Text, nullable=False)
+    confidence = Column(Float, nullable=True)
+    persona_votes = Column(JSONB, nullable=True)  # Dict of persona → vote
+    applied_to_game = Column(Boolean, default=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    case = relationship("CommitteeCase", back_populates="results")
+
+    # Indices
+    __table_args__ = (
+        Index("idx_committee_result_case", "case_id"),
+    )
+
+
+class SkillDNAProfile(Base):
+    """SkillDNA Profile model - RefIQ v1.0 - unified skill profiles for refs, players, crews"""
+    __tablename__ = "skilldna_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Subject identification
+    subject_type = Column(SQLEnum(SubjectType), nullable=False)  # referee, player, crew
+    subject_id = Column(UUID(as_uuid=True), nullable=False)
+    sport = Column(SQLEnum(SportType), nullable=False)
+
+    # Profile data
+    profile_vector = Column(JSONB, nullable=False, default=dict)  # Skill key → score
+    twin_alignment = Column(Float, nullable=True)  # TwinFlow alignment score
+    profile_metadata = Column(JSONB, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    updates = relationship("SkillDNAProfileUpdate", back_populates="profile", cascade="all, delete-orphan")
+
+    # Indices
+    __table_args__ = (
+        Index("idx_skilldna_profile_subject", "subject_type", "subject_id"),
+        Index("idx_skilldna_profile_sport", "sport"),
+        Index("idx_skilldna_profile_updated", "updated_at"),
+    )
+
+
+class SkillDNAProfileUpdate(Base):
+    """SkillDNA Profile Update model - RefIQ v1.0 - tracks skill evolution"""
+    __tablename__ = "skilldna_profile_updates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profile_id = Column(UUID(as_uuid=True), ForeignKey("skilldna_profiles.id"), nullable=False)
+    game_id = Column(UUID(as_uuid=True), ForeignKey("games.id"), nullable=False)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id"), nullable=True)
+
+    # Delta data
+    delta_vector = Column(JSONB, nullable=False)  # Skill key → delta
+    twin_delta = Column(JSONB, nullable=True)  # TwinFlow delta
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    profile = relationship("SkillDNAProfile", back_populates="updates")
+
+    # Indices
+    __table_args__ = (
+        Index("idx_skilldna_update_profile", "profile_id"),
+        Index("idx_skilldna_update_game", "game_id"),
+        Index("idx_skilldna_update_created", "created_at"),
+    )
+
+
+class PcosEvent(Base):
+    """PCOS Event Store model - RefIQ v1.0 - stores all PCOS bus events"""
+    __tablename__ = "pcos_event_store"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Event info
+    event_type = Column(String, nullable=False)
+    source = Column(String, nullable=False)  # "RefQuest.UI", "RefQuest.Backend", etc.
+    payload = Column(JSONB, nullable=False)
+    correlation_id = Column(String, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Indices
+    __table_args__ = (
+        Index("idx_pcos_event_type", "event_type"),
+        Index("idx_pcos_event_source", "source"),
+        Index("idx_pcos_event_correlation", "correlation_id"),
+        Index("idx_pcos_event_created", "created_at"),
     )
